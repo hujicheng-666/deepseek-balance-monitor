@@ -1,4 +1,4 @@
-"""DeepSeek 余额监视器 —— 程序入口
+"""DeepSeek —— 程序入口
 
 一个可爱的桌面悬浮小窗，实时显示 DeepSeek API 账户余额。
 运行：python main.py
@@ -12,7 +12,7 @@ from widget import BalanceWidget
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("DeepSeek 余额监视器")
+    app.setApplicationName("DeepSeek")
 
     screen = app.primaryScreen().availableGeometry()
     widget = BalanceWidget()
