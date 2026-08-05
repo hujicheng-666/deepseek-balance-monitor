@@ -1,4 +1,4 @@
-"""DeepSeek 余额监视器 —— 可爱悬浮小窗"""
+"""DeepSeek —— 桌面悬浮窗"""
 import threading
 import time
 from datetime import datetime
@@ -28,11 +28,14 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
+    QGraphicsEffect,
     QInputDialog,
     QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
+    QScrollArea,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -59,10 +62,66 @@ CARD_SIZE = QSize(310, 174)
 ORB_SIZE = 32        # 收起后「鲸鱼精灵球」的直径
 
 
+class TimelineWheelEffect(QGraphicsEffect):
+    """把远离中心的时间线行压扁，形成滚轮的圆柱透视。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._position = 0.0
+
+    def set_position(self, position):
+        self._position = max(-1.0, min(1.0, position))
+        self.update()
+
+    def draw(self, painter):
+        # PySide6 通过可变 QPoint 参数返回源图偏移，而非返回元组。
+        offset = QPoint()
+        pixmap = self.sourcePixmap(Qt.LogicalCoordinates, offset)
+        amount = abs(self._position)
+        painter.save()
+        painter.setOpacity(1.0 - amount * 0.76)
+        center_x = offset.x() + pixmap.width() / 2
+        center_y = offset.y() + pixmap.height() / 2
+        painter.translate(center_x, center_y)
+        # 越靠近上下边缘，纵向越扁，模拟圆柱表面转离视线。
+        painter.scale(1.0, 1.0 - amount * 0.48)
+        painter.translate(-center_x, -center_y)
+        painter.drawPixmap(offset, pixmap)
+        painter.restore()
+
+
+class TimelineCanvas(QWidget):
+    """在同一画布上绘制节点与连线，保证相邻事件始终相连。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.rows = []
+        self.row_opacities = []
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        x = 7
+        centers = [row.y() + 8 for row in self.rows]
+        for index, center_y in enumerate(centers):
+            alpha = int(230 * (self.row_opacities[index] if index < len(self.row_opacities) else 1))
+            if index < len(centers) - 1:
+                next_alpha = int(230 * (
+                    self.row_opacities[index + 1]
+                    if index + 1 < len(self.row_opacities) else 1
+                ))
+                painter.setPen(QPen(QColor(190, 195, 205, min(alpha, next_alpha)), 1))
+                painter.drawLine(x, center_y + 4, x, centers[index + 1])
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(225, 228, 234, alpha))
+            painter.drawEllipse(QPoint(x, center_y), 3, 3)
+
+
 class BalanceWidget(QWidget):
     """无边框、透明、置顶的悬浮余额卡片"""
 
     data_ready = Signal(tuple)  # (state, data, error)
+    service_status_ready = Signal(tuple)  # (data, error)
 
     def __init__(self):
         super().__init__()
@@ -71,6 +130,8 @@ class BalanceWidget(QWidget):
         self._dragging = False
         self._hovered = False
         self._menu_open = False
+        self._service_view = False
+        self._timeline_rows = []
         self._dock_edge = None   # None / 'left' / 'right'
         self._docked = False     # 是否贴边
         self._peeking = False    # 贴边时是否探出
@@ -89,12 +150,20 @@ class BalanceWidget(QWidget):
         self.setMinimumSize(ORB_SIZE, ORB_SIZE)
         self.setMaximumSize(CARD_SIZE)
         self.resize(CARD_SIZE)
-        self.setToolTip("右键小窗可以设置 / 刷新 / 退出哦")
+        self.setToolTip("右键可以设置 / 刷新 / 退出")
 
         self._build_ui()
         self._build_menu()
 
+        self._wheel_snap_timer = QTimer(self)
+        self._wheel_snap_timer.setSingleShot(True)
+        self._wheel_snap_timer.timeout.connect(self._snap_timeline_to_center)
+        self.service_timeline.verticalScrollBar().valueChanged.connect(
+            self._update_timeline_wheel
+        )
+
         self.data_ready.connect(self._on_data)
+        self.service_status_ready.connect(self._on_service_status)
 
         # 自动刷新
         self._timer = QTimer(self)
@@ -138,8 +207,8 @@ class BalanceWidget(QWidget):
         self.emoji.setFont(QFont("Segoe UI Emoji", 17))
         self.emoji.setStyleSheet("background:transparent;")
 
-        title = QLabel("DeepSeek 余额")
-        title.setStyleSheet(
+        self.title_label = QLabel("DeepSeek")
+        self.title_label.setStyleSheet(
             f"font-family:'Microsoft YaHei UI';font-size:13px;"
             f"font-weight:600;color:{COLOR_TEXT};background:transparent;"
         )
@@ -165,6 +234,17 @@ class BalanceWidget(QWidget):
         )
         self.btn_min.clicked.connect(self.hide_to_side)
 
+        self.btn_service = QToolButton(self)
+        self.btn_service.setText("◉")
+        self.btn_service.setCursor(Qt.PointingHandCursor)
+        self.btn_service.setToolTip("查看 DeepSeek 服务状态")
+        self.btn_service.setStyleSheet(
+            "QToolButton{background:transparent;color:#9A9EA8;border:none;"
+            "font-family:'Segoe UI';font-size:14px;padding:2px 3px;}"
+            "QToolButton:hover{color:" + COLOR_ACCENT + ";}"
+        )
+        self.btn_service.clicked.connect(self.toggle_service_view)
+
         self.btn_refresh = QToolButton(self)
         self.btn_refresh.setText("↻")
         self.btn_refresh.setCursor(Qt.PointingHandCursor)
@@ -177,10 +257,11 @@ class BalanceWidget(QWidget):
         self.btn_refresh.clicked.connect(self.refresh)
 
         header.addWidget(self.emoji)
-        header.addWidget(title)
+        header.addWidget(self.title_label)
         header.addStretch(1)
         header.addWidget(self.status_dot)
         header.addWidget(self.status_label)
+        header.addWidget(self.btn_service)
         header.addWidget(self.btn_min)
         header.addWidget(self.btn_refresh)
         root.addLayout(header)
@@ -200,8 +281,41 @@ class BalanceWidget(QWidget):
         )
         root.addWidget(self.balance_note)
 
+        # 服务状态页：与余额内容共用同一张卡片，不增加窗口尺寸。
+        self.service_panel = QWidget(self)
+        self.service_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.service_panel.setAttribute(Qt.WA_TranslucentBackground)
+        self.service_panel.setStyleSheet("background:transparent;")
+        service_layout = QVBoxLayout(self.service_panel)
+        service_layout.setContentsMargins(4, 5, 4, 0)
+        service_layout.setSpacing(5)
+        self.service_timeline = QScrollArea(self.service_panel)
+        self.service_timeline.setWidgetResizable(True)
+        self.service_timeline.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.service_timeline.setAutoFillBackground(False)
+        self.service_timeline.viewport().setAutoFillBackground(False)
+        self.service_timeline.viewport().setAttribute(Qt.WA_TranslucentBackground)
+        self.service_timeline.setStyleSheet(
+            "QScrollArea{border:0;background:transparent;}"
+            "QScrollArea > QWidget > QWidget{background:transparent;border:0;}"
+            "QScrollBar:vertical{width:4px;background:transparent;margin:2px;}"
+            "QScrollBar::handle:vertical{background:#6C707A;border-radius:2px;min-height:18px;}"
+        )
+        self.timeline_content = TimelineCanvas(self.service_timeline)
+        self.timeline_content.setAttribute(Qt.WA_TranslucentBackground)
+        self.timeline_content.setStyleSheet("background:transparent;")
+        self.timeline_layout = QVBoxLayout(self.timeline_content)
+        self.timeline_layout.setContentsMargins(0, 0, 3, 0)
+        self.timeline_layout.setSpacing(0)
+        self.service_timeline.setWidget(self.timeline_content)
+        service_layout.addWidget(self.service_timeline, 1)
+        self.service_panel.hide()
+        root.addWidget(self.service_panel, 1)
+
         # 底部信息
-        bottom = QHBoxLayout()
+        self.bottom_row = QWidget(self)
+        bottom = QHBoxLayout(self.bottom_row)
+        bottom.setContentsMargins(0, 0, 0, 0)
         bottom.setSpacing(6)
         self.lbl_topped = self._info_label("充值 --")
         self.lbl_granted = self._info_label("赠送 --")
@@ -211,8 +325,11 @@ class BalanceWidget(QWidget):
         bottom.addWidget(self.lbl_granted)
         bottom.addStretch(1)
         bottom.addWidget(self.lbl_time)
-        root.addStretch(1)
-        root.addLayout(bottom)
+        # 余额页用它把底部信息压到卡片底部；服务页隐藏后，时间线可占满高度。
+        self.balance_spacer = QWidget(self)
+        self.balance_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        root.addWidget(self.balance_spacer, 1)
+        root.addWidget(self.bottom_row)
 
     def _info_label(self, text):
         lbl = QLabel(text)
@@ -462,6 +579,7 @@ class BalanceWidget(QWidget):
                 self._anim.stop()
             self.setGeometry(self._full_geometry(self._dock_edge))
             self._set_card_content_visible(True)
+            self._apply_view_visibility()
         self._dock_edge = None
         self._docked = False
         self._peeking = False
@@ -499,11 +617,21 @@ class BalanceWidget(QWidget):
     def _finish_dock_animation(self):
         if self._animation_kind == "expand" and self._docked and self._peeking:
             self._set_card_content_visible(True)
+            self._apply_view_visibility()
         self._animation_kind = None
 
     def _set_card_content_visible(self, visible):
         for child in self.findChildren(QLabel) + self.findChildren(QToolButton):
             child.setVisible(visible)
+
+    def _apply_view_visibility(self):
+        """在贴边展开后按当前页面模式恢复内容，避免两页叠加。"""
+        show_service = self._service_view
+        self.balance.setVisible(not show_service)
+        self.balance_note.setVisible(not show_service)
+        self.bottom_row.setVisible(not show_service)
+        self.balance_spacer.setVisible(not show_service)
+        self.service_panel.setVisible(show_service)
 
     def _cancel_hide(self):
         self._hide_timer.stop()
@@ -582,6 +710,194 @@ class BalanceWidget(QWidget):
 
         threading.Thread(target=work, daemon=True).start()
 
+    def toggle_service_view(self):
+        """在余额页和服务状态页之间切换，不改变悬浮窗尺寸。"""
+        self._service_view = not self._service_view
+        show_service = self._service_view
+        self._apply_view_visibility()
+        self.title_label.setText("DeepSeek 服务" if show_service else "DeepSeek")
+        self.btn_service.setText("‹" if show_service else "◉")
+        self.btn_service.setToolTip("返回余额" if show_service else "查看 DeepSeek 服务状态")
+        if show_service:
+            self.check_service_status()
+        else:
+            # 服务查询会临时覆盖状态文案；返回余额页时立即恢复余额连接状态。
+            self.set_status("ok" if (self._cfg.get("api_key") or "").strip() else "no_key")
+
+    def check_service_status(self):
+        """异步查询官方服务状态，不阻塞悬浮窗操作。"""
+        self.set_status("loading", "检查服务中")
+        self._set_timeline_message("正在加载近期服务事件…")
+
+        def work():
+            try:
+                self.service_status_ready.emit((api.fetch_service_status(), None))
+            except api.ApiError as exc:
+                self.service_status_ready.emit((None, str(exc)))
+            except Exception as exc:
+                self.service_status_ready.emit((None, f"发生了一点意外：{exc}"))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_service_status(self, payload):
+        data, error = payload
+        if error:
+            self.set_status("error", "服务状态未知")
+            self._set_timeline_message("服务事件暂时无法读取\n" + error)
+            return
+
+        summary = data.get("status") or {}
+        indicator = str(summary.get("indicator") or "unknown")
+        description = str(summary.get("description") or "未知")
+        indicator_text = {
+            "none": "正常",
+            "minor": "轻微故障",
+            "major": "重大故障",
+            "critical": "严重故障",
+            "maintenance": "维护中",
+        }.get(indicator, description)
+        incidents = data.get("recent_incidents") or data.get("incidents") or []
+        timeline_events = []
+        for incident in incidents:
+            if not isinstance(incident, dict):
+                continue
+            name = str(incident.get("name") or "服务事件")
+            updates = incident.get("incident_updates") or []
+            if not updates:
+                updates = [{
+                    "body": str(incident.get("status") or "状态已更新"),
+                    "updated_at": incident.get("updated_at") or incident.get("created_at") or "",
+                }]
+            for update in updates:
+                if not isinstance(update, dict):
+                    continue
+                timeline_events.append({
+                    "time": str(update.get("updated_at") or ""),
+                    "title": name,
+                    "detail": str(update.get("body") or incident.get("status") or "状态已更新"),
+                })
+        timeline_events.sort(key=lambda item: item["time"], reverse=True)
+
+        self.set_status("ok", "服务 " + indicator_text)
+        self._render_timeline(timeline_events[:20])
+
+    def _clear_timeline(self):
+        self._timeline_rows = []
+        self.timeline_content.rows = []
+        self.timeline_content.row_opacities = []
+        self._wheel_top_spacer = None
+        self._wheel_bottom_spacer = None
+        while self.timeline_layout.count():
+            item = self.timeline_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _set_timeline_message(self, text):
+        self._clear_timeline()
+        label = QLabel(text, self.timeline_content)
+        label.setWordWrap(True)
+        label.setStyleSheet(
+            f"font-family:'Microsoft YaHei UI';font-size:10px;color:{COLOR_SUB};"
+            "background:transparent;padding:5px 0;"
+        )
+        self.timeline_layout.addWidget(label)
+        self.timeline_layout.addStretch(1)
+
+    def _render_timeline(self, events):
+        self._clear_timeline()
+        if not events:
+            self._set_timeline_message("近期没有服务事件")
+            return
+        self._wheel_top_spacer = QWidget(self.timeline_content)
+        self._wheel_top_spacer.setStyleSheet("background:transparent;")
+        self._wheel_top_spacer.setFixedHeight(0)
+        self.timeline_layout.addWidget(self._wheel_top_spacer)
+
+        for index, event in enumerate(events):
+            row = QWidget(self.timeline_content)
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(18, 2, 4, 0)
+            row_layout.setSpacing(6)
+
+            content = QLabel(
+                (event["time"].replace("T", " ")[:16] or "最近更新")
+                + "\n" + event["title"] + "\n" + event["detail"][:100]
+            )
+            content.setWordWrap(True)
+            content.setStyleSheet(
+                f"font-family:'Microsoft YaHei UI';font-size:10px;color:{COLOR_SUB};"
+                "background:transparent;"
+            )
+            row_layout.addWidget(content, 1)
+            effect = TimelineWheelEffect(row)
+            row.setGraphicsEffect(effect)
+            self.timeline_layout.addWidget(row)
+            self._timeline_rows.append((row, effect, content))
+
+        self._wheel_bottom_spacer = QWidget(self.timeline_content)
+        self._wheel_bottom_spacer.setStyleSheet("background:transparent;")
+        self._wheel_bottom_spacer.setFixedHeight(0)
+        self.timeline_layout.addWidget(self._wheel_bottom_spacer)
+        self.timeline_content.rows = [item[0] for item in self._timeline_rows]
+        self.timeline_content.update()
+        QTimer.singleShot(0, self._prepare_timeline_wheel)
+
+    def _prepare_timeline_wheel(self):
+        """给首尾项预留滚到中轴的空间，避免被滚轮边缘截断。"""
+        if not self._timeline_rows:
+            return
+        viewport_height = self.service_timeline.viewport().height()
+        first_row = self._timeline_rows[0][0]
+        last_row = self._timeline_rows[-1][0]
+        if self._wheel_top_spacer:
+            self._wheel_top_spacer.setFixedHeight(
+                max(0, int(viewport_height / 2 - first_row.height() / 2 - 8))
+            )
+        if self._wheel_bottom_spacer:
+            self._wheel_bottom_spacer.setFixedHeight(
+                max(0, int(viewport_height / 2 - last_row.height() / 2 - 8))
+            )
+        self._update_timeline_wheel()
+
+    def _update_timeline_wheel(self):
+        """模拟 iOS 选时滚轮：中间项清晰，上下项逐步淡出。"""
+        viewport = self.service_timeline.viewport()
+        center_y = viewport.height() / 2
+        opacities = []
+        for row, effect, content in self._timeline_rows:
+            row_center = row.mapTo(viewport, QPoint(0, 0)).y() + row.height() / 2
+            distance = abs(row_center - center_y)
+            ratio = min(1.0, distance / max(1, viewport.height() * 0.62))
+            direction = (row_center - center_y) / max(1, viewport.height() * 0.62)
+            effect.set_position(direction)
+            opacities.append(1.0 - ratio * 0.72)
+            # 不用选中框或刺眼白字，仅在中央保持正常亮度。
+            focus = ratio < 0.16
+            content.setStyleSheet(
+                "font-family:'Microsoft YaHei UI';font-size:10px;font-weight:400;color:%s;"
+                "background:transparent;"
+                % (COLOR_TEXT if focus else COLOR_SUB)
+            )
+        self.timeline_content.row_opacities = opacities
+        self.timeline_content.update()
+        self._wheel_snap_timer.start(140)
+
+    def _snap_timeline_to_center(self):
+        if not self._timeline_rows:
+            return
+        viewport = self.service_timeline.viewport()
+        center_y = viewport.height() / 2
+        bar = self.service_timeline.verticalScrollBar()
+        closest_row = min(
+            self._timeline_rows,
+            key=lambda item: abs(
+                item[0].mapTo(viewport, QPoint(0, 0)).y() + item[0].height() / 2 - center_y
+            ),
+        )[0]
+        offset = closest_row.mapTo(viewport, QPoint(0, 0)).y() + closest_row.height() / 2 - center_y
+        if abs(offset) > 1:
+            bar.setValue(bar.value() + int(offset))
+
     def _on_data(self, payload):
         state, data, error = payload
         if state == "ok":
@@ -642,7 +958,7 @@ class BalanceWidget(QWidget):
         box = QMessageBox(self)
         box.setWindowTitle("欢迎～")
         box.setIcon(QMessageBox.Information)
-        box.setText("🐳 欢迎使用 DeepSeek 余额监视器！\n\n"
+        box.setText("🐳 欢迎使用 DeepSeek！\n\n"
                     "第一次使用，先粘贴你的 API Key 吧。\n"
                     "之后随时可以右键悬浮窗重新设置。")
         box.setStandardButtons(QMessageBox.Ok)
