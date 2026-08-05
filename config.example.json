@@ -1,0 +1,6 @@
+{
+  "api_key": "",
+  "refresh_interval": 60,
+  "low_threshold": 10.0,
+  "low_warn": true
+}
