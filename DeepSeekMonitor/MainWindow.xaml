@@ -1,0 +1,318 @@
+<Window x:Class="DeepSeekMonitor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:DeepSeekMonitor"
+        Title="DeepSeek"
+        Width="310" Height="174"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        MouseEnter="Window_MouseEnter"
+        MouseLeave="Window_MouseLeave">
+
+    <Window.Resources>
+        <!-- 头部小圆钮：◉ / – / ↻ -->
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#FF9A9EA8"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="5,2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#FFFFFFFF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 深色右键菜单（用默认模板保证子菜单/稳定性，仅调配色） -->
+        <Style x:Key="DarkMenu" TargetType="ContextMenu">
+            <Setter Property="Background" Value="#FF25262B"/>
+            <Setter Property="Foreground" Value="#FFF4F5F7"/>
+            <Setter Property="BorderBrush" Value="#FF5B5E67"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily" Value="Microsoft YaHei UI"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="#FF25262B" BorderBrush="#FF5B5E67" BorderThickness="1"
+                                CornerRadius="10" Padding="6" SnapsToDevicePixels="True">
+                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="DarkMenuItem" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#FFF4F5F7"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="12,0,24,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Grid>
+                            <Border x:Name="ItemBorder" Background="Transparent" CornerRadius="6"
+                                    Padding="{TemplateBinding Padding}">
+                                <Grid>
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                                    <Path x:Name="Check" Data="M 0,4 L 3,7 L 8,0" Stroke="#FFFFFFFF"
+                                          StrokeThickness="1.5" Width="9" Height="8" HorizontalAlignment="Right"
+                                          VerticalAlignment="Center" Visibility="Collapsed"/>
+                                    <Path x:Name="Arrow" Data="M 0,0 L 4,4 L 0,8" Stroke="#FFB7BAC2"
+                                          StrokeThickness="1.2" Width="5" Height="9" HorizontalAlignment="Right"
+                                          VerticalAlignment="Center" Visibility="Collapsed"/>
+                                </Grid>
+                            </Border>
+                            <Popup x:Name="Submenu" Placement="Right" AllowsTransparency="True" PopupAnimation="Fade"
+                                   IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}">
+                                <Border Background="#FF25262B" BorderBrush="#FF5B5E67" BorderThickness="1"
+                                        CornerRadius="10" Padding="6">
+                                    <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#FF3A3C43"/>
+                                <Setter Property="Foreground" Value="#FFFFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="Role" Value="SubmenuHeader">
+                                <Setter TargetName="Arrow" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="DarkMenuSeparator" TargetType="Separator">
+            <Setter Property="Margin" Value="8,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1" Background="#FF454850"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Window.ContextMenu>
+        <ContextMenu x:Name="MainMenu" Style="{StaticResource DarkMenu}">
+            <MenuItem Style="{StaticResource DarkMenuItem}" Header="立即刷新" Click="MenuRefresh_Click"/>
+            <MenuItem Style="{StaticResource DarkMenuItem}" Header="设置 API Key" Click="MenuSetKey_Click"/>
+            <MenuItem Style="{StaticResource DarkMenuItem}" Header="收进屏幕侧边" Click="MenuDock_Click"/>
+            <MenuItem Style="{StaticResource DarkMenuItem}" Header="自动刷新间隔">
+                <MenuItem Style="{StaticResource DarkMenuItem}" Header="30 秒" Tag="30" Click="MenuInterval_Click"/>
+                <MenuItem Style="{StaticResource DarkMenuItem}" Header="1 分钟" Tag="60" Click="MenuInterval_Click"/>
+                <MenuItem Style="{StaticResource DarkMenuItem}" Header="5 分钟" Tag="300" Click="MenuInterval_Click"/>
+                <MenuItem Style="{StaticResource DarkMenuItem}" Header="15 分钟" Tag="900" Click="MenuInterval_Click"/>
+            </MenuItem>
+            <Separator Style="{StaticResource DarkMenuSeparator}"/>
+            <MenuItem x:Name="MenuLowWarn" Style="{StaticResource DarkMenuItem}" Header="余额偏低时提醒"
+                      IsCheckable="True" IsChecked="True" Click="MenuLowWarn_Click"/>
+            <Separator Style="{StaticResource DarkMenuSeparator}"/>
+            <MenuItem Style="{StaticResource DarkMenuItem}" Header="退出" Click="MenuQuit_Click"/>
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <Grid>
+        <!-- ============ 完整卡片（固定尺寸 + 位图缓存，保证缩放流畅） ============ -->
+        <Grid x:Name="CardGrid"
+              Width="310" Height="174"
+              HorizontalAlignment="Left" VerticalAlignment="Top"
+              CacheMode="BitmapCache">
+            <Grid.RenderTransform>
+                <ScaleTransform x:Name="CardScale"/>
+            </Grid.RenderTransform>
+            <Border x:Name="Card" CornerRadius="26" BorderThickness="1.2" BorderBrush="#FF777B86">
+                <Grid>
+                    <!-- 石墨玻璃底色 -->
+                    <Border CornerRadius="26">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#D2282A30" Offset="0"/>
+                                <GradientStop Color="#E20F1014" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <!-- 顶部入光 -->
+                    <Border x:Name="TopGlow" CornerRadius="26">
+                        <Border.Background>
+                            <RadialGradientBrush GradientOrigin="0.16,0.05" Center="0.16,0.05"
+                                                 RadiusX="0.72" RadiusY="0.72">
+                                <GradientStop Color="#3AFFFFFF" Offset="0"/>
+                                <GradientStop Color="#16DCE0EB" Offset="0.55"/>
+                                <GradientStop Color="#001E1F24" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <!-- 底部暖反射 -->
+                    <Border CornerRadius="26">
+                        <Border.Background>
+                            <RadialGradientBrush GradientOrigin="0.82,1.0" Center="0.82,1.0"
+                                                 RadiusX="0.58" RadiusY="0.58">
+                                <GradientStop Color="#1AE8CA96" Offset="0"/>
+                                <GradientStop Color="#003C3830" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Border.Background>
+                    </Border>
+
+                    <Grid Margin="16,12,16,10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 头部 -->
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="🐳" FontFamily="Segoe UI Emoji" FontSize="17" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="TitleText" Text="DeepSeek" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#FFF4F5F7" Grid.Column="1" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusDot" Text="●" FontSize="12" Foreground="#FFE5B568"
+                                       Grid.Column="3" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock x:Name="StatusLabel" Text="准备中" FontSize="10" Foreground="#FFB7BAC2"
+                                       Grid.Column="4" VerticalAlignment="Center"/>
+                            <Button x:Name="BtnService" Content="◉" Style="{StaticResource IconButton}"
+                                    Grid.Column="5" Margin="2,0" ToolTip="查看 DeepSeek 服务状态" Click="BtnService_Click"/>
+                            <Button x:Name="BtnMin" Content="–" Style="{StaticResource IconButton}"
+                                    Grid.Column="6" Margin="2,0" ToolTip="收进屏幕侧边" Click="BtnMin_Click"/>
+                            <Button x:Name="BtnRefresh" Content="↻" Style="{StaticResource IconButton}"
+                                    Grid.Column="7" Margin="2,0" ToolTip="立即刷新" Click="BtnRefresh_Click"/>
+                        </Grid>
+
+                        <!-- 余额大数字 -->
+                        <TextBlock x:Name="BalanceText" Text="--.--" FontSize="34" FontWeight="Bold"
+                                   Foreground="#FFFFFFFF" Grid.Row="1"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                        <!-- 备注 -->
+                        <TextBlock x:Name="BalanceNote" Text="正在查看小金库…" FontSize="11" Foreground="#FFB7BAC2"
+                                   Grid.Row="2" HorizontalAlignment="Center"/>
+
+                        <!-- 服务状态时间线（切换时占满卡片） -->
+                        <Grid x:Name="ServicePanel" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed">
+                            <ScrollViewer x:Name="SvTimeline"
+                                          VerticalScrollBarVisibility="Hidden"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          PanningMode="VerticalOnly"
+                                          ScrollChanged="SvTimeline_ScrollChanged" Margin="4,5,4,0">
+                                <ScrollViewer.Resources>
+                                    <Style TargetType="ScrollBar">
+                                        <Setter Property="Width" Value="4"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Margin" Value="0,2"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ScrollBar">
+                                                    <Grid Background="Transparent">
+                                                        <Track x:Name="PART_Track" IsDirectionReversed="True"
+                                                               Maximum="{TemplateBinding Maximum}" Minimum="{TemplateBinding Minimum}"
+                                                               Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}"
+                                                               Orientation="{TemplateBinding Orientation}">
+                                                            <Track.Thumb>
+                                                                <Thumb MinHeight="18">
+                                                                    <Thumb.Template>
+                                                                        <ControlTemplate TargetType="Thumb">
+                                                                            <Border Background="#FF6C707A" CornerRadius="2"/>
+                                                                        </ControlTemplate>
+                                                                    </Thumb.Template>
+                                                                </Thumb>
+                                                            </Track.Thumb>
+                                                        </Track>
+                                                    </Grid>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ScrollViewer.Resources>
+                                <Grid Margin="0,0,0,0">
+                                    <StackPanel x:Name="SpTimeline" Margin="0,0,3,0"/>
+                                    <local:TimelineWheelOverlay x:Name="TimelineOverlay" IsHitTestVisible="False"/>
+                                </Grid>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <!-- 余额页底部信息 -->
+                        <Grid x:Name="BottomRow" Grid.Row="3" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="LblTopped" Text="充值 --" FontSize="10" Foreground="#FFB7BAC2"
+                                       HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="LblGranted" Text="赠送 --" FontSize="10" Foreground="#FFB7BAC2"
+                                       HorizontalAlignment="Center" Grid.Column="1"/>
+                            <TextBlock x:Name="LblTime" Text="更新 --:--" FontSize="10" Foreground="#FFB7BAC2"
+                                       HorizontalAlignment="Right" Grid.Column="2"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ============ 贴边时的鲸鱼精灵球 ============ -->
+        <Grid x:Name="Orb" Width="32" Height="32" Visibility="Collapsed"
+              HorizontalAlignment="Left" VerticalAlignment="Top">
+            <Ellipse Margin="3">
+                <Ellipse.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#FF676A73" Offset="0"/>
+                        <GradientStop Color="#FF303238" Offset="0.52"/>
+                        <GradientStop Color="#FF17181C" Offset="1"/>
+                    </LinearGradientBrush>
+                </Ellipse.Fill>
+                <Ellipse.Stroke>
+                    <SolidColorBrush Color="#FFD7DBE4"/>
+                </Ellipse.Stroke>
+                <Ellipse.StrokeThickness>1.4</Ellipse.StrokeThickness>
+            </Ellipse>
+            <Ellipse Margin="3">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="#26FFFFFF"/>
+                </Ellipse.Fill>
+            </Ellipse>
+            <Ellipse Margin="8,7,13,16">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="#36FFFFFF"/>
+                </Ellipse.Fill>
+            </Ellipse>
+            <TextBlock Text="🐳" FontFamily="Segoe UI Emoji" FontSize="16" Foreground="#FFFFFFFF"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+    </Grid>
+</Window>

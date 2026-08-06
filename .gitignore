@@ -1,7 +1,12 @@
 # config.json 里存着你的 API Key，千万别提交到 git
 config.json
-__pycache__/
-*.pyc
-.venv/
+
+# 构建产物
 build/
 dist/
+release/
+.venv/
+
+# .NET / WPF
+**/bin/
+**/obj/
