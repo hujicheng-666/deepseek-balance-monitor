@@ -1,6 +1,6 @@
 # 🐳 DeepSeek
 
-一个轻量的 **DeepSeek 桌面悬浮窗**，用于查看 API 余额和官方服务事件。
+一个轻量的 **DeepSeek 桌面悬浮窗**（C# / WPF），用于查看 API 余额和官方服务事件。
 它始终置顶、不占任务栏，可收纳到屏幕左右侧边。
 
 ## ✨ 功能
@@ -9,20 +9,23 @@
 - 自动刷新余额，支持 30 秒 / 1 / 5 / 15 分钟间隔
 - 拖动或点击收纳按钮后，可缩为侧边鲸鱼球；悬停自动展开
 - 余额页与服务事件页在同一卡片内切换，不改变窗口尺寸
-- 服务事件页从 DeepSeek 官方 Statuspage 读取近期事件，并以可滚动时间线展示
+- 服务事件页读取 DeepSeek 官方状态页近期事件，以可滚动时间线展示
 - 右键菜单可设置 API Key、刷新间隔、低余额提醒和退出
 - 关闭时提供粒子消散动效
 
-## 📦 安装
+## 🚀 运行（开发模式）
+
+需要 **.NET 8 SDK**：
 
 ```powershell
-pip install PySide6 requests
+dotnet run --project .\DeepSeekMonitor\DeepSeekMonitor.csproj
 ```
 
-## 🚀 运行
+或先构建再运行：
 
 ```powershell
-python main.py
+dotnet build .\DeepSeekMonitor\DeepSeekMonitor.csproj -c Release
+.\DeepSeekMonitor\bin\Release\net8.0-windows\DeepSeekMonitor.exe
 ```
 
 首次运行会提示输入 API Key。也可以将 `config.example.json` 复制为
@@ -30,7 +33,7 @@ python main.py
 
 > 提示：想让悬浮窗开机自启，可以把这个命令放进「启动」文件夹：
 > `Win+R` 输入 `shell:startup`，在里面放一个 `start.bat`，内容写上
-> `python D:\vscode\deepseek余额监视器\main.py` 即可。
+> `start "" "D:\vscode\deepseek余额监视器\DeepSeekMonitor\bin\Release\net8.0-windows\DeepSeekMonitor.exe"` 即可。
 
 ## 🔑 获取 API Key
 
@@ -57,12 +60,19 @@ python main.py
 
 ```
 deepseek-balance-monitor/
-├── main.py          # 程序入口
-├── widget.py        # 悬浮窗、侧边收纳与服务事件时间线
-├── api.py           # 余额与官方服务状态接口调用
-├── config.py        # 本地配置读写
-├── config.json      # 运行后自动生成（存你的 API Key，别提交到 git）
-└── requirements.txt # 依赖列表
+├── DeepSeekMonitor/        # C# / WPF 工程（唯一版本）
+│   ├── MainWindow.xaml(.cs)   # 悬浮窗、贴边收纳与服务事件时间线
+│   ├── InputDialog.xaml(.cs)  # API Key 输入框
+│   ├── Services/
+│   │   ├── DeepSeekApi.cs      # 余额与官方服务状态接口调用
+│   │   └── AppConfig.cs        # 本地配置读写（config.json）
+│   ├── Models/                 # BalanceInfo / ServiceEvent
+│   ├── TimelineWheelOverlay.cs # 时间线滚轮渲染
+│   └── ParticleDismiss.cs      # 粒子消散动效
+├── build.ps1             # 一键打包（publish + Inno Setup）
+├── installer.iss         # Inno Setup 安装脚本
+├── config.example.json   # 配置模板
+└── config.json           # 运行后生成（存你的 API Key，别提交到 git）
 ```
 
 ## ⚠️ 注意
@@ -70,3 +80,17 @@ deepseek-balance-monitor/
 - `config.json` 会以**明文**保存你的 API Key，请勿把该文件分享或提交到公开仓库（已在 `.gitignore` 中忽略）。
 - 余额数据来自 DeepSeek 官方接口 `GET /user/balance`。
 - 服务事件数据来自 [DeepSeek Service Status](https://status.deepseek.com/)。
+
+## 📦 打包发布（.NET publish + Inno Setup）
+
+一键打包（自包含单文件，无需目标机器安装 .NET 运行时，再生成安装程序）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1
+```
+
+> `build.ps1` 会自动找 Inno Setup（`D:\Inno Setup 7\ISCC.exe` 或标准路径，也可用环境变量 `ISCC` 指定）。
+
+产物：
+- `dist\DeepSeek\DeepSeekMonitor.exe` — 免安装版（绿色，自包含单文件）
+- `release\DeepSeek-Setup-2.0.0.exe` — 安装程序
