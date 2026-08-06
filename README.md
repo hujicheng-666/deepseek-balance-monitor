@@ -9,7 +9,7 @@
 - 自动刷新余额，支持 30 秒 / 1 / 5 / 15 分钟间隔
 - 拖动或点击收纳按钮后，可缩为侧边鲸鱼球；悬停自动展开
 - 余额页与服务事件页在同一卡片内切换，不改变窗口尺寸
-- 服务事件页读取 DeepSeek 官方状态页（Flashduty 平台）近期事件，以可滚动时间线展示
+- 服务事件页读取 DeepSeek 官方状态页近期事件，以可滚动时间线展示
 - 右键菜单可设置 API Key、刷新间隔、低余额提醒和退出
 - 关闭时提供粒子消散动效
 
@@ -79,7 +79,7 @@ deepseek-balance-monitor/
 
 - `config.json` 会以**明文**保存你的 API Key，请勿把该文件分享或提交到公开仓库（已在 `.gitignore` 中忽略）。
 - 余额数据来自 DeepSeek 官方接口 `GET /user/balance`。
-- 服务事件数据来自 [DeepSeek Service Status](https://status.deepseek.com/)（已迁移到 Flashduty 平台，程序优先走 `api.flashcat.cloud` 镜像，网络兼容性更好）。
+- 服务事件数据来自 [DeepSeek Service Status](https://status.deepseek.com/)。
 
 ## 📦 打包发布（.NET publish + Inno Setup）
 
