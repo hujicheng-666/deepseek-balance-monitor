@@ -5,8 +5,10 @@ config.json
 build/
 dist/
 release/
+.artifacts/
 .venv/
 
 # .NET / WPF
 **/bin/
 **/obj/
+**/*_wpftmp.csproj
