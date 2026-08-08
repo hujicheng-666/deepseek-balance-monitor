@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        x:Class="DeepSeekMonitor.Views.InputDialog"
+        mc:Ignorable="d"
+        d:DesignWidth="364" d:DesignHeight="166"
+        Title="输入"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        Topmost="True"
+        ShowInTaskbar="False"
+        FontFamily="Microsoft YaHei UI, Segoe UI"
+        Background="#FDF8FF"
+        RequestedThemeVariant="Light">
+    <StackPanel Margin="22,18">
+        <TextBlock x:Name="MessageText"
+                   TextWrapping="Wrap"
+                   FontSize="12"
+                   Foreground="#5C4A6D"
+                   MaxWidth="320"
+                   Margin="0,0,0,14" />
+        <TextBox x:Name="KeyBox"
+                 Height="30"
+                 FontSize="13"
+                 Padding="6,2"
+                 PasswordChar="●"
+                 Background="#FFFFFF"
+                 Foreground="#392946"
+                 BorderBrush="#E9D9F6" />
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="8"
+                    Margin="0,18,0,0">
+            <Button Content="取消"
+                    Width="78" Height="30"
+                    Background="#FFFFFF"
+                    Foreground="#5C4A6D"
+                    BorderBrush="#E9D9F6"
+                    Click="OnCancel" />
+            <Button Content="保存"
+                    Width="78" Height="30"
+                    IsDefault="True"
+                    Background="#8A6FE8"
+                    Foreground="#FFFFFF"
+                    BorderThickness="0"
+                    Click="OnOk" />
+        </StackPanel>
+    </StackPanel>
+</Window>

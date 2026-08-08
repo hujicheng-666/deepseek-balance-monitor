@@ -1,0 +1,202 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="using:DeepSeekMonitor.Controls"
+        mc:Ignorable="d" d:DesignWidth="310" d:DesignHeight="174"
+        x:Class="DeepSeekMonitor.Views.MainWindow"
+        Title="DeepSeek" Width="310" Height="174"
+        WindowDecorations="None" Topmost="True" ShowInTaskbar="False"
+        CanResize="False" TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        PointerPressed="OnPointerPressed"
+        PointerEntered="OnPointerEntered"
+        PointerExited="OnPointerExited">
+
+    <Window.Styles>
+        <Style Selector="ContextMenu">
+            <Setter Property="Background" Value="#FF25262B"/>
+            <Setter Property="Foreground" Value="#FFF4F5F7"/>
+            <Setter Property="BorderBrush" Value="#FF5B5E67"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="6"/>
+            <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style Selector="ContextMenu MenuItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#FFF4F5F7"/>
+            <Setter Property="Padding" Value="12,6,24,6"/>
+            <Setter Property="MinHeight" Value="30"/>
+        </Style>
+        <Style Selector="ContextMenu MenuItem:pointerover">
+            <Setter Property="Background" Value="#FF3A3C43"/>
+            <Setter Property="Foreground" Value="#FFFFFFFF"/>
+        </Style>
+        <Style Selector="ContextMenu Separator">
+            <Setter Property="Background" Value="#FF454850"/>
+            <Setter Property="Margin" Value="8,4"/>
+        </Style>
+        <Style Selector="Button.iconButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#FF9A9EA8"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="5,2"/>
+        </Style>
+        <Style Selector="Button.iconButton:pointerover /template/ ContentPresenter">
+            <Setter Property="TextElement.Foreground" Value="#FFFFFFFF"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid x:Name="RootPanel">
+        <!-- ============ 完整卡片 ============ -->
+        <Grid x:Name="CardGrid" Width="310" Height="174"
+              HorizontalAlignment="Left" VerticalAlignment="Top"
+              RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+                <ScaleTransform ScaleX="1" ScaleY="1"/>
+            </Grid.RenderTransform>
+            <Border x:Name="Card" CornerRadius="26" BorderThickness="1.2" BorderBrush="#FF777B86">
+                <Grid>
+                    <!-- 石墨玻璃底色 -->
+                    <Border CornerRadius="26">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#D2282A30" Offset="0"/>
+                                <GradientStop Color="#E20F1014" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <!-- 顶部入光 -->
+                    <Border x:Name="TopGlow" CornerRadius="26">
+                        <Border.Background>
+                            <RadialGradientBrush GradientOrigin="0.16,0.05" Center="0.16,0.05"
+                                                 RadiusX="0.72" RadiusY="0.72">
+                                <GradientStop Color="#3AFFFFFF" Offset="0"/>
+                                <GradientStop Color="#16DCE0EB" Offset="0.55"/>
+                                <GradientStop Color="#001E1F24" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <!-- 底部暖反射 -->
+                    <Border CornerRadius="26">
+                        <Border.Background>
+                            <RadialGradientBrush GradientOrigin="0.82,1.0" Center="0.82,1.0"
+                                                 RadiusX="0.58" RadiusY="0.58">
+                                <GradientStop Color="#1AE8CA96" Offset="0"/>
+                                <GradientStop Color="#003C3830" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Border.Background>
+                    </Border>
+
+                    <Grid Margin="16,12,16,10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 头部 -->
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="🐳" FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji" FontSize="17" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="TitleText" Text="DeepSeek" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#FFF4F5F7" Grid.Column="1" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusDot" Text="●" FontSize="12" Foreground="#FFE5B568"
+                                       Grid.Column="3" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock x:Name="StatusLabel" Text="准备中" FontSize="10" Foreground="#FFB7BAC2"
+                                       Grid.Column="4" VerticalAlignment="Center"/>
+                            <Button x:Name="BtnService" Content="◉" Classes="iconButton"
+                                    Grid.Column="5" Margin="2,0" ToolTip.Tip="查看 DeepSeek 服务状态" Click="OnServiceClick"/>
+                            <Button x:Name="BtnMin" Content="–" Classes="iconButton"
+                                    Grid.Column="6" Margin="2,0" ToolTip.Tip="收进屏幕侧边" Click="OnMinClick"/>
+                            <Button x:Name="BtnRefresh" Content="↻" Classes="iconButton"
+                                    Grid.Column="7" Margin="2,0" ToolTip.Tip="立即刷新" Click="OnRefreshClick"/>
+                        </Grid>
+
+                        <!-- 余额大数字 -->
+                        <TextBlock x:Name="BalanceText" Text="--.--" FontSize="34" FontWeight="Bold"
+                                   Foreground="#FFFFFFFF" Grid.Row="1"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                        <!-- 备注 -->
+                        <TextBlock x:Name="BalanceNote" Text="正在查看小金库…" FontSize="11" Foreground="#FFB7BAC2"
+                                   Grid.Row="2" HorizontalAlignment="Center"/>
+
+                        <!-- 服务状态时间线 -->
+                        <Grid x:Name="ServicePanel" Grid.Row="1" Grid.RowSpan="2" IsVisible="False">
+                            <ScrollViewer x:Name="SvTimeline"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Hidden"
+                                          ScrollChanged="OnTimelineScroll" Margin="4,5,4,0">
+                                <Grid Margin="0,0,0,0">
+                                    <StackPanel x:Name="SpTimeline" Margin="0,0,3,0"/>
+                                    <local:TimelineWheelOverlay x:Name="TimelineOverlay" IsHitTestVisible="False"/>
+                                </Grid>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <!-- 余额页底部信息 -->
+                        <Grid x:Name="BottomRow" Grid.Row="3" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="LblTopped" Text="充值 --" FontSize="10" Foreground="#FFB7BAC2"
+                                       HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="LblGranted" Text="赠送 --" FontSize="10" Foreground="#FFB7BAC2"
+                                       HorizontalAlignment="Center" Grid.Column="1"/>
+                            <TextBlock x:Name="LblTime" Text="更新 --:--" FontSize="10" Foreground="#FFB7BAC2"
+                                       HorizontalAlignment="Right" Grid.Column="2"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ============ 贴边时的鲸鱼精灵球 ============ -->
+        <Grid x:Name="Orb" Width="32" Height="32" IsVisible="False"
+              HorizontalAlignment="Left" VerticalAlignment="Top">
+            <Ellipse Margin="3">
+                <Ellipse.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#FF676A73" Offset="0"/>
+                        <GradientStop Color="#FF303238" Offset="0.52"/>
+                        <GradientStop Color="#FF17181C" Offset="1"/>
+                    </LinearGradientBrush>
+                </Ellipse.Fill>
+                <Ellipse.Stroke>
+                    <SolidColorBrush Color="#FFD7DBE4"/>
+                </Ellipse.Stroke>
+                <Ellipse.StrokeThickness>1.4</Ellipse.StrokeThickness>
+            </Ellipse>
+            <Ellipse Margin="3">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="#26FFFFFF"/>
+                </Ellipse.Fill>
+            </Ellipse>
+            <Ellipse Margin="8,7,13,16">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="#36FFFFFF"/>
+                </Ellipse.Fill>
+            </Ellipse>
+            <TextBlock Text="🐳" FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji" FontSize="16"
+                       Foreground="#FFFFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+    </Grid>
+</Window>
