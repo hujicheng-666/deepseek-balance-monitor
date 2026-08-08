@@ -94,3 +94,22 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 产物：
 - `dist\DeepSeek\DeepSeekMonitor.exe` — 免安装版（绿色，自包含单文件）
 - `release\DeepSeek-Setup-2.0.0.exe` — 安装程序
+
+## 🍎🐧 跨平台版（Avalonia，macOS / Linux）
+
+`DeepSeekMonitor.Avalonia` 是用 **Avalonia** 移植的跨平台版本，功能与 WPF 版基本一致
+（悬浮窗、余额刷新、服务时间线、托盘、贴边收纳），业务逻辑（API/配置）复用同一套实现。
+WPF 版（Windows）与 Avalonia 版并存，互不影响。
+
+仅生成系统安装包，不再保留便携版、压缩包或 AppImage：
+
+- Windows：在 Windows 上执行 `powershell -ExecutionPolicy Bypass -File .\build.ps1`，生成 `release\DeepSeek-Setup-2.0.0.exe`。
+- macOS：在 macOS 上执行 `./packaging/make-macos-dmg.sh`，生成 `release/DeepSeek-2.0.0-macos-<arch>.dmg`。
+- Linux：在 Linux 上执行 `./packaging/make-linux-packages.sh`，生成 `release/DeepSeek_2.0.0_linux_<arch>.deb` 和 `.rpm`。
+
+也可在对应系统上执行 `powershell -ExecutionPolicy Bypass -File .\build-av.ps1`，它会选择该系统的安装包脚本。
+
+> 说明：
+> - macOS DMG 未签名，正式分发前请设置 `MACOS_SIGN_IDENTITY`，并再执行 `notarize`。
+> - 托盘图标在 Linux 需要支持 StatusNotifier/AppIndicator 的桌面环境；纯 X11 无托盘也可正常使用。
+> - 粒子消散动效在 Avalonia 版中简化为直接关闭。

@@ -273,7 +273,15 @@ public partial class MainWindow : Window
     {
         _config.RefreshInterval = seconds;
         AppConfig.Save(_config);
+
+        // Changing Interval alone does not enable a DispatcherTimer.  The
+        // original code therefore persisted the user's choice but never
+        // performed an automatic refresh.  Restarting also makes a changed
+        // interval take effect from this moment instead of retaining the
+        // previous schedule.
+        _refreshTimer.Stop();
         _refreshTimer.Interval = TimeSpan.FromSeconds(seconds);
+        _refreshTimer.Start();
     }
 
     // ---------------- 服务状态视图 ----------------
