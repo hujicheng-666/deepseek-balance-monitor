@@ -27,12 +27,16 @@ public partial class MainWindow : Window
     private const int DockThreshold = 36;
     private const int DockAnimMs = 280;
 
+    // DeepSeek 官方充值页
+    private const string TopUpUrl = "https://platform.deepseek.com/top_up";
+
     private static readonly IBrush SubBrush = Brush("#B7BAC2");
     private static readonly IBrush AmberBrush = Brush("#E5B568");
     private static readonly IBrush GreenBrush = Brush("#56C596");
     private static readonly IBrush CoralBrush = Brush("#ED7C72");
     private static readonly IBrush BorderNorm = Brush("#777B86");
     private static readonly IBrush BorderHover = Brush("#D7DBE4");
+    private static readonly IBrush WhiteBrush = Brush("#FFFFFF");
 
     private readonly DeepSeekApi _api = new();
     private AppConfig _config = null!;
@@ -53,6 +57,8 @@ public partial class MainWindow : Window
     private bool _menuOpen;
     private bool _lowBalanceNotified;
     private bool _dismissing;
+    private bool _refreshing;       // 防止余额刷新重入
+    private bool _loadingService;   // 防止服务状态加载重入
 
     private readonly List<Control> _timelineRows = new();
     private readonly List<TextBlock> _rowTexts = new();
@@ -212,6 +218,8 @@ public partial class MainWindow : Window
     // ---------------- 余额刷新 ----------------
     private async void Refresh()
     {
+        // 防止快速连点 / 定时与手动刷新重叠导致并发请求
+        if (_refreshing) return;
         var key = (_config.ApiKey ?? "").Trim();
         if (key.Length == 0)
         {
@@ -221,6 +229,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        _refreshing = true;
         SetStatus("loading", "看看中");
         BalanceText.Text = "···";
 
@@ -230,24 +239,28 @@ public partial class MainWindow : Window
         }
         catch (ApiException ex)
         {
-            SetStatus("error");
-            BalanceText.Foreground = CoralBrush;
-            BalanceText.Text = "--.--";
-            BalanceNote.Text = "暂时没查到余额";
-            LblTopped.Text = "充值 --";
-            LblGranted.Text = "赠送 --";
-            LblTime.Text = "提示 " + (ex.Message.Length > 22 ? ex.Message[..22] : ex.Message);
+            ShowBalanceError(ex.Message.Length > 22 ? ex.Message[..22] : ex.Message);
         }
         catch (Exception ex)
         {
-            SetStatus("error");
-            BalanceText.Foreground = CoralBrush;
-            BalanceText.Text = "--.--";
-            BalanceNote.Text = "暂时没查到余额";
-            LblTopped.Text = "充值 --";
-            LblGranted.Text = "赠送 --";
-            LblTime.Text = "提示 " + ex.GetType().Name;
+            ShowBalanceError(ex.GetType().Name);
         }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    /// <summary>余额查询失败时统一在悬浮窗内降级展示错误,不弹出崩溃框。</summary>
+    private void ShowBalanceError(string hint)
+    {
+        SetStatus("error");
+        BalanceText.Foreground = CoralBrush;
+        BalanceText.Text = "--.--";
+        BalanceNote.Text = "暂时没查到余额";
+        LblTopped.Text = "充值 --";
+        LblGranted.Text = "赠送 --";
+        LblTime.Text = "提示 " + hint;
     }
 
     private void Render(BalanceInfo data)
@@ -261,7 +274,7 @@ public partial class MainWindow : Window
         }
 
         var symbol = info.Currency == "CNY" ? "¥" : "$";
-        BalanceText.Foreground = Brush("#FFFFFF");
+        BalanceText.Foreground = WhiteBrush;
         BalanceText.Text = $"{symbol} {info.TotalBalance:F2}";
         BalanceNote.Text = $"{info.Currency} 可用余额";
         LblTopped.Text = $"充值 {symbol}{info.ToppedUpBalance:F2}";
@@ -289,7 +302,7 @@ public partial class MainWindow : Window
         {
             _lowBalanceNotified = false;
             SetStatus("ok");
-            BalanceText.Foreground = Brush("#FFFFFF");
+            BalanceText.Foreground = WhiteBrush;
             BalanceNote.Text = $"{info.Currency} 可用余额";
         }
     }
@@ -315,6 +328,8 @@ public partial class MainWindow : Window
 
     private void CheckServiceStatus()
     {
+        if (_loadingService) return;
+        _loadingService = true;
         SetStatus("loading", "检查服务中");
         SetTimelineMessage("正在加载近期服务事件…");
         _ = LoadServiceEventsAsync();
@@ -341,6 +356,10 @@ public partial class MainWindow : Window
                 SetStatus("error", "服务状态未知");
                 SetTimelineMessage("服务事件暂时无法读取\n" + ex.Message);
             }
+        }
+        finally
+        {
+            _loadingService = false;
         }
     }
 
@@ -697,6 +716,10 @@ public partial class MainWindow : Window
         refresh.Click += (_, _) => Refresh();
         menu.Items.Add(refresh);
 
+        var topUp = new MenuItem { Header = "去充值" };
+        topUp.Click += (_, _) => OpenTopUpPage();
+        menu.Items.Add(topUp);
+
         var setKey = new MenuItem { Header = "设置 API Key" };
         setKey.Click += (_, _) => AskApiKey();
         menu.Items.Add(setKey);
@@ -775,7 +798,10 @@ public partial class MainWindow : Window
         if (result != true) return;
 
         _config.ApiKey = dlg.Value.Trim();
-        AppConfig.Save(_config);
+        if (!AppConfig.Save(_config))
+            _notifications?.Show(new Notification("保存失败",
+                "API Key 可能不会被记住,请检查磁盘空间或目录权限。",
+                NotificationType.Warning));
         if (string.IsNullOrWhiteSpace(_config.ApiKey))
         {
             SetStatus("no_key", "未设置");
@@ -821,6 +847,17 @@ public partial class MainWindow : Window
     private void OnServiceClick(object? sender, RoutedEventArgs e) => ToggleServiceView();
     private void OnMinClick(object? sender, RoutedEventArgs e) => RequestDock();
     private void OnRefreshClick(object? sender, RoutedEventArgs e) => Refresh();
+    private void OnTopUpClick(object? sender, RoutedEventArgs e) => OpenTopUpPage();
+
+    // ---------------- 去充值 ----------------
+    private void OpenTopUpPage()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(TopUpUrl) { UseShellExecute = true });
+        }
+        catch { /* 打不开浏览器时静默忽略 */ }
+    }
 
     private static IBrush Brush(string hex) => Avalonia.Media.Brush.Parse(hex);
 

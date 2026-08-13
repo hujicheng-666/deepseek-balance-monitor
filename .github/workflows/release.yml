@@ -56,8 +56,46 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          test -n "$MACOS_CERTIFICATE_P12"
+          test -n "$MACOS_CERTIFICATE_PASSWORD"
+          test -n "$MACOS_KEYCHAIN_PASSWORD"
+          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          echo -n "$MACOS_CERTIFICATE_P12" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
       - name: Build DMG
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: bash ./packaging/make-macos-dmg.sh
+
+      - name: Notarize and staple DMG
+        env:
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          test -n "$MACOS_NOTARY_KEY"
+          test -n "$MACOS_NOTARY_KEY_ID"
+          test -n "$MACOS_NOTARY_ISSUER_ID"
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+          printf '%s' "$MACOS_NOTARY_KEY" > "$KEY_PATH"
+          DMG="$(find release -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$DMG"
+          xcrun notarytool submit "$DMG" --key "$KEY_PATH" --key-id "$MACOS_NOTARY_KEY_ID" --issuer "$MACOS_NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

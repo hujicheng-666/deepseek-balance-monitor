@@ -8,7 +8,8 @@ AppId={{C593B8E5-02D3-4A16-98BA-2E777B8B1D9B}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={localappdata}\Programs\{#AppName}
+; 默认安装目录名固定为 DeepSeekMonitor(不要用 {#AppName},它叫 DeepSeek)
+DefaultDirName={localappdata}\Programs\DeepSeekMonitor
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -39,3 +40,28 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "启动 {#AppName}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// 把 Inno 默认的 unins000.exe 卸载程序重命名为 uninstall.exe(数据文件需同名跟随),
+// 并同步更新「设置/应用」里的卸载入口,使其指向新文件名。
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  AppDir: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    AppDir := ExpandConstant('{app}');
+    if FileExists(AppDir + '\unins000.exe') then
+    begin
+      RenameFile(AppDir + '\unins000.exe', AppDir + '\uninstall.exe');
+      if FileExists(AppDir + '\unins000.dat') then
+        RenameFile(AppDir + '\unins000.dat', AppDir + '\uninstall.dat');
+    end;
+    RegWriteStringValue(HKCU,
+      'Software\Microsoft\Windows\CurrentVersion\Uninstall\{C593B8E5-02D3-4A16-98BA-2E777B8B1D9B}_is1',
+      'UninstallString', '"' + AppDir + '\uninstall.exe"');
+    RegWriteStringValue(HKCU,
+      'Software\Microsoft\Windows\CurrentVersion\Uninstall\{C593B8E5-02D3-4A16-98BA-2E777B8B1D9B}_is1',
+      'QuietUninstallString', '"' + AppDir + '\uninstall.exe" /SILENT');
+  end;
+end;

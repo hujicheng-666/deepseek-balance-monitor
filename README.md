@@ -112,4 +112,3 @@ WPF 版（Windows）与 Avalonia 版并存，互不影响。
 > 说明：
 > - macOS DMG 未签名，正式分发前请设置 `MACOS_SIGN_IDENTITY`，并再执行 `notarize`。
 > - 托盘图标在 Linux 需要支持 StatusNotifier/AppIndicator 的桌面环境；纯 X11 无托盘也可正常使用。
-> - 粒子消散动效在 Avalonia 版中简化为直接关闭。

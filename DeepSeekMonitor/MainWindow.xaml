@@ -121,6 +121,7 @@
     <Window.ContextMenu>
         <ContextMenu x:Name="MainMenu" Style="{StaticResource DarkMenu}">
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="立即刷新" Click="MenuRefresh_Click"/>
+            <MenuItem Style="{StaticResource DarkMenuItem}" Header="去充值" Click="MenuTopUp_Click"/>
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="设置 API Key" Click="MenuSetKey_Click"/>
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="收进屏幕侧边" Click="MenuDock_Click"/>
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="自动刷新间隔">
@@ -198,6 +199,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="🐳" FontFamily="Segoe UI Emoji" FontSize="17" Margin="0,0,8,0"/>
                             <TextBlock x:Name="TitleText" Text="DeepSeek" FontSize="13" FontWeight="SemiBold"
@@ -212,6 +214,8 @@
                                     Grid.Column="6" Margin="2,0" ToolTip="收进屏幕侧边" Click="BtnMin_Click"/>
                             <Button x:Name="BtnRefresh" Content="↻" Style="{StaticResource IconButton}"
                                     Grid.Column="7" Margin="2,0" ToolTip="立即刷新" Click="BtnRefresh_Click"/>
+                            <Button x:Name="BtnTopUp" Content="¥" Style="{StaticResource IconButton}"
+                                    Grid.Column="8" Margin="2,0" ToolTip="去充值" Click="BtnTopUp_Click"/>
                         </Grid>
 
                         <!-- 余额大数字 -->

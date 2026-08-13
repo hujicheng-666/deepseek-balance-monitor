@@ -112,6 +112,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="🐳" FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji" FontSize="17" Margin="0,0,8,0"/>
                             <TextBlock x:Name="TitleText" Text="DeepSeek" FontSize="13" FontWeight="SemiBold"
@@ -126,6 +127,8 @@
                                     Grid.Column="6" Margin="2,0" ToolTip.Tip="收进屏幕侧边" Click="OnMinClick"/>
                             <Button x:Name="BtnRefresh" Content="↻" Classes="iconButton"
                                     Grid.Column="7" Margin="2,0" ToolTip.Tip="立即刷新" Click="OnRefreshClick"/>
+                            <Button x:Name="BtnTopUp" Content="¥" Classes="iconButton"
+                                    Grid.Column="8" Margin="2,0" ToolTip.Tip="去充值" Click="OnTopUpClick"/>
                         </Grid>
 
                         <!-- 余额大数字 -->

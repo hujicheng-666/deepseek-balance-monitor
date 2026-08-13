@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build a signed-ready macOS DMG on macOS.
+# Build a macOS DMG on macOS.  For public distribution, set
+# MACOS_SIGN_IDENTITY and notarize the completed DMG before uploading it.
 # Usage: ./packaging/make-macos-dmg.sh [osx-arm64|osx-x64]
 set -euo pipefail
 
@@ -51,7 +52,12 @@ PLIST
 
 # Set MACOS_SIGN_IDENTITY to sign locally before creating the DMG.
 if [[ -n "${MACOS_SIGN_IDENTITY:-}" ]]; then
-  codesign --force --deep --options runtime --sign "$MACOS_SIGN_IDENTITY" "$APP"
+  # .NET needs JIT under the hardened runtime.  Sign the bundle only after all
+  # published files have been copied into it, otherwise the signature breaks.
+  ENTITLEMENTS="$ROOT/packaging/macos-entitlements.plist"
+  codesign --force --deep --options runtime --timestamp \
+    --entitlements "$ENTITLEMENTS" --sign "$MACOS_SIGN_IDENTITY" "$APP"
+  codesign --verify --deep --strict --verbose=2 "$APP"
 fi
 
 DMG="$RELEASE/DeepSeek-${VERSION}-macos-${ARCH}.dmg"
