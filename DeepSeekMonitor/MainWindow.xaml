@@ -122,6 +122,7 @@
         <ContextMenu x:Name="MainMenu" Style="{StaticResource DarkMenu}">
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="立即刷新" Click="MenuRefresh_Click"/>
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="去充值" Click="MenuTopUp_Click"/>
+            <MenuItem Style="{StaticResource DarkMenuItem}" Header="查看模型定价" Click="MenuPricing_Click"/>
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="设置 API Key" Click="MenuSetKey_Click"/>
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="收进屏幕侧边" Click="MenuDock_Click"/>
             <MenuItem Style="{StaticResource DarkMenuItem}" Header="自动刷新间隔">
@@ -200,6 +201,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="🐳" FontFamily="Segoe UI Emoji" FontSize="17" Margin="0,0,8,0"/>
                             <TextBlock x:Name="TitleText" Text="DeepSeek" FontSize="13" FontWeight="SemiBold"
@@ -214,8 +216,10 @@
                                     Grid.Column="6" Margin="2,0" ToolTip="收进屏幕侧边" Click="BtnMin_Click"/>
                             <Button x:Name="BtnRefresh" Content="↻" Style="{StaticResource IconButton}"
                                     Grid.Column="7" Margin="2,0" ToolTip="立即刷新" Click="BtnRefresh_Click"/>
+                            <Button x:Name="BtnPricing" Content="$" Style="{StaticResource IconButton}"
+                                    Grid.Column="8" Margin="2,0" ToolTip="查看模型定价" Click="BtnPricing_Click"/>
                             <Button x:Name="BtnTopUp" Content="¥" Style="{StaticResource IconButton}"
-                                    Grid.Column="8" Margin="2,0" ToolTip="去充值" Click="BtnTopUp_Click"/>
+                                    Grid.Column="9" Margin="2,0" ToolTip="去充值" Click="BtnTopUp_Click"/>
                         </Grid>
 
                         <!-- 余额大数字 -->
@@ -268,6 +272,27 @@
                                     <local:TimelineWheelOverlay x:Name="TimelineOverlay" IsHitTestVisible="False"/>
                                 </Grid>
                             </ScrollViewer>
+                        </Grid>
+
+                        <!-- 模型定价（切换时占满卡片，可滚动避免内容被裁） -->
+                        <Grid x:Name="PricingPanel" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ScrollViewer x:Name="SvPricing" VerticalScrollBarVisibility="Hidden"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          PanningMode="VerticalOnly" Margin="4,5,4,0">
+                                <StackPanel x:Name="SpPricing" Margin="0,0,3,0"/>
+                            </ScrollViewer>
+                            <Grid Grid.Row="1" Margin="0,6,0,0">
+                                <TextBlock x:Name="PricingMeta" Text="$ / 百万 tokens" FontSize="10"
+                                           Foreground="#FFB7BAC2" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="PricingLink" Text="官方定价页 →" FontSize="10"
+                                           Foreground="#FFE5B568" HorizontalAlignment="Right" Cursor="Hand"
+                                           Tag="clickable" ToolTip="在浏览器中打开官方定价页"
+                                           MouseLeftButtonUp="PricingLink_Click"/>
+                            </Grid>
                         </Grid>
 
                         <!-- 余额页底部信息 -->

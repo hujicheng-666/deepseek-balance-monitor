@@ -8,7 +8,8 @@
 - 无边框、置顶、石墨玻璃质感的紧凑悬浮窗
 - 自动刷新余额，支持 30 秒 / 1 / 5 / 15 分钟间隔
 - 拖动或点击收纳按钮后，可缩为侧边鲸鱼球；悬停自动展开
-- 余额页与服务事件页在同一卡片内切换，不改变窗口尺寸
+- 余额页、模型定价页与服务事件页在同一卡片内切换，不改变窗口尺寸
+- 模型定价页展示 deepseek-chat / deepseek-reasoner 的官方输入输出单价（含缓存命中/未命中），底部可一键打开官方定价页核对
 - 服务事件页读取 DeepSeek 官方状态页近期事件，以可滚动时间线展示
 - 右键菜单可设置 API Key、刷新间隔、低余额提醒和退出
 - 关闭时提供粒子消散动效
@@ -51,6 +52,7 @@ dotnet build .\DeepSeekMonitor\DeepSeekMonitor.csproj -c Release
 | 鼠标靠近边缘的鲸鱼精灵球 | 小窗自动滑出查看 |
 | 鼠标离开探出的小窗 | 0.7 秒后自动收回侧边 |
 | 点击头部的 `◉` | 切换服务事件时间线；再次点击返回余额页 |
+| 点击头部的 `$` | 查看模型定价；再次点击返回余额页（也可右键菜单进入） |
 | 在事件时间线上滚动 | 中心事件清晰、上下事件淡出，停止后自动对齐 |
 | 右键点击 | 弹出菜单（刷新 / 设置 Key / 收进侧边 / 刷新间隔 / 退出） |
 | 点头部的 ↻ | 立即刷新余额 |
@@ -80,6 +82,7 @@ deepseek-balance-monitor/
 - `config.json` 会以**明文**保存你的 API Key，请勿把该文件分享或提交到公开仓库（已在 `.gitignore` 中忽略）。
 - 余额数据来自 DeepSeek 官方接口 `GET /user/balance`。
 - 服务事件数据来自 [DeepSeek Service Status](https://status.deepseek.com/)。
+- 模型定价为内置快照（`Models/ModelPricing.cs`，页面底部标注收录日期），DeepSeek 官方价格偶有调整，请以[官方定价页](https://api-docs.deepseek.com/quick_start/pricing)为准。
 
 ## 📦 打包发布（.NET publish + Inno Setup）
 

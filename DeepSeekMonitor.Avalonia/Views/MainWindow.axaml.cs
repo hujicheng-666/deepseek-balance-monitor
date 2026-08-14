@@ -20,6 +20,9 @@ namespace DeepSeekMonitor.Views;
 
 public partial class MainWindow : Window
 {
+    /// <summary>卡片当前展示的页面：余额 / 服务事件 / 模型定价。</summary>
+    private enum CardView { Balance, Service, Pricing }
+
     private const double CardW = 310;
     private const double CardH = 174;
     private const double OrbSize = 32;
@@ -53,7 +56,7 @@ public partial class MainWindow : Window
     private bool _pointerInside;
     private double _dockedCenterY;
     private bool _dragging;
-    private bool _serviceView;
+    private CardView _view;
     private bool _menuOpen;
     private bool _lowBalanceNotified;
     private bool _dismissing;
@@ -307,23 +310,96 @@ public partial class MainWindow : Window
         }
     }
 
-    // ---------------- 服务状态视图 ----------------
-    private void ToggleServiceView()
+    // ---------------- 卡片页切换（余额 / 服务 / 定价） ----------------
+    /// <summary>切换卡片页面；再次点击当前页的按钮则回到余额页。</summary>
+    private void ShowView(CardView view)
     {
-        _serviceView = !_serviceView;
-        var show = _serviceView;
-        BalanceText.IsVisible = !show;
-        BalanceNote.IsVisible = !show;
-        BottomRow.IsVisible = !show;
-        ServicePanel.IsVisible = show;
-        TitleText.Text = show ? "DeepSeek 服务" : "DeepSeek";
-        BtnService.Content = show ? "‹" : "◉";
-        ToolTip.SetTip(BtnService, show ? "返回余额" : "查看 DeepSeek 服务状态");
+        if (_view == view)
+        {
+            ShowView(CardView.Balance);
+            return;
+        }
 
-        if (show)
+        _view = view;
+        var balance = view == CardView.Balance;
+        var service = view == CardView.Service;
+        BalanceText.IsVisible = balance;
+        BalanceNote.IsVisible = balance;
+        BottomRow.IsVisible = balance;
+        ServicePanel.IsVisible = service;
+        PricingPanel.IsVisible = !balance && !service;
+        TitleText.Text = view switch
+        {
+            CardView.Service => "DeepSeek 服务",
+            CardView.Pricing => "模型定价",
+            _ => "DeepSeek",
+        };
+        BtnService.Content = service ? "‹" : "◉";
+        ToolTip.SetTip(BtnService, service ? "返回余额" : "查看 DeepSeek 服务状态");
+        BtnPricing.Content = view == CardView.Pricing ? "‹" : "$";
+        ToolTip.SetTip(BtnPricing, view == CardView.Pricing ? "返回余额" : "查看模型定价");
+
+        if (service)
             CheckServiceStatus();
+        else if (view == CardView.Pricing)
+            RenderPricing();
         else
             SetStatus(string.IsNullOrWhiteSpace(_config.ApiKey) ? "no_key" : "ok");
+    }
+
+    // ---------------- 模型定价视图 ----------------
+    private void RenderPricing()
+    {
+        SpPricing.Children.Clear();
+        // ScrollViewer 内容在首次布局前宽度未约束，TextBlock 的 Wrap 可能不生效导致横向溢出；
+        // 显式限宽（基于视口实际宽度），保证任何情况下都不左右截断。
+        var maxW = SvPricing.Viewport.Width > 0 ? SvPricing.Viewport.Width - 7 : 296;
+        foreach (var p in ModelPricing.All)
+        {
+            // 与服务状态页一致的纯文本列表：无卡片框、可滚动、不截断
+            SpPricing.Children.Add(new TextBlock
+            {
+                Text = $"{p.ApiName} · {p.BaseModel}",
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = Brush("#E9EBF0"), // 柔和白，避免纯白刺眼
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = maxW,
+                Margin = new Thickness(0, 0, 4, 2),
+            });
+            SpPricing.Children.Add(new TextBlock
+            {
+                Text = $"现行：输入 ${Price(p.InputCacheHit)}/${Price(p.InputCacheMiss)}（命中/未命中）· 输出 ${Price(p.Output)}\n" +
+                       $"{ModelPricing.PeakOffPeakEffective} 起峰谷：高峰 输入 ${Price(p.PeakInputCacheHit)}/${Price(p.PeakInputCacheMiss)} 输出 ${Price(p.PeakOutput)} · 非高峰 输入 ${Price(p.OffPeakInputCacheHit)}/${Price(p.OffPeakInputCacheMiss)} 输出 ${Price(p.OffPeakOutput)}",
+                FontSize = 10,
+                Foreground = SubBrush,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = maxW,
+                Margin = new Thickness(0, 0, 4, 12),
+            });
+        }
+
+        PricingMeta.Text = $"$ / 百万 tokens · 收录于 {ModelPricing.UpdatedAt}";
+    }
+
+    private static string Price(double value)
+        => value.ToString("0.######");
+
+    private void OnPricingClick(object? sender, RoutedEventArgs e) => ShowView(CardView.Pricing);
+
+    private void OnPricingLinkClick(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+        OpenPricingPage();
+    }
+
+    private void OpenPricingPage()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ModelPricing.OfficialPage) { UseShellExecute = true });
+        }
+        catch { /* 打不开浏览器时静默忽略 */ }
     }
 
     private void CheckServiceStatus()
@@ -525,9 +601,10 @@ public partial class MainWindow : Window
     // ---------------- 拖拽 / 贴边 ----------------
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        // Header controls and context-menu items must never start a window
-        // drag: doing so cancels their click action on some backends.
-        if (e.Source is Button || e.Source is MenuItem || e.Source is TextBox)
+        // Header controls, context-menu items and clickable text (定价页链接)
+        // must never start a window drag: doing so cancels their click action.
+        if (e.Source is Button || e.Source is MenuItem || e.Source is TextBox ||
+            (e.Source is TextBlock tb && Equals(tb.Tag, "clickable")))
             return;
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -720,6 +797,10 @@ public partial class MainWindow : Window
         topUp.Click += (_, _) => OpenTopUpPage();
         menu.Items.Add(topUp);
 
+        var pricing = new MenuItem { Header = "查看模型定价" };
+        pricing.Click += (_, _) => ShowView(CardView.Pricing);
+        menu.Items.Add(pricing);
+
         var setKey = new MenuItem { Header = "设置 API Key" };
         setKey.Click += (_, _) => AskApiKey();
         menu.Items.Add(setKey);
@@ -844,7 +925,7 @@ public partial class MainWindow : Window
     }
 
     // ---------------- 事件处理 ----------------
-    private void OnServiceClick(object? sender, RoutedEventArgs e) => ToggleServiceView();
+    private void OnServiceClick(object? sender, RoutedEventArgs e) => ShowView(CardView.Service);
     private void OnMinClick(object? sender, RoutedEventArgs e) => RequestDock();
     private void OnRefreshClick(object? sender, RoutedEventArgs e) => Refresh();
     private void OnTopUpClick(object? sender, RoutedEventArgs e) => OpenTopUpPage();

@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -44,6 +45,10 @@ public partial class MainWindow
 
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // 可点击文字（定价页“官方定价页 →”链接）不触发窗口拖拽，
+        // 否则会吃掉它的点击事件。
+        if (e.OriginalSource is TextBlock { Tag: "clickable" })
+            return;
         try
         {
             _dragging = true;

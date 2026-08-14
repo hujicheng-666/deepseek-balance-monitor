@@ -113,6 +113,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="🐳" FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji" FontSize="17" Margin="0,0,8,0"/>
                             <TextBlock x:Name="TitleText" Text="DeepSeek" FontSize="13" FontWeight="SemiBold"
@@ -127,8 +128,10 @@
                                     Grid.Column="6" Margin="2,0" ToolTip.Tip="收进屏幕侧边" Click="OnMinClick"/>
                             <Button x:Name="BtnRefresh" Content="↻" Classes="iconButton"
                                     Grid.Column="7" Margin="2,0" ToolTip.Tip="立即刷新" Click="OnRefreshClick"/>
+                            <Button x:Name="BtnPricing" Content="$" Classes="iconButton"
+                                    Grid.Column="8" Margin="2,0" ToolTip.Tip="查看模型定价" Click="OnPricingClick"/>
                             <Button x:Name="BtnTopUp" Content="¥" Classes="iconButton"
-                                    Grid.Column="8" Margin="2,0" ToolTip.Tip="去充值" Click="OnTopUpClick"/>
+                                    Grid.Column="9" Margin="2,0" ToolTip.Tip="去充值" Click="OnTopUpClick"/>
                         </Grid>
 
                         <!-- 余额大数字 -->
@@ -151,6 +154,27 @@
                                     <local:TimelineWheelOverlay x:Name="TimelineOverlay" IsHitTestVisible="False"/>
                                 </Grid>
                             </ScrollViewer>
+                        </Grid>
+
+                        <!-- 模型定价（可滚动，避免内容被裁） -->
+                        <Grid x:Name="PricingPanel" Grid.Row="1" Grid.RowSpan="2" IsVisible="False">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ScrollViewer x:Name="SvPricing" VerticalScrollBarVisibility="Hidden"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          Margin="4,5,4,0">
+                                <StackPanel x:Name="SpPricing" Margin="0,0,3,0"/>
+                            </ScrollViewer>
+                            <Grid Grid.Row="1" Margin="0,6,0,0">
+                                <TextBlock x:Name="PricingMeta" Text="$ / 百万 tokens" FontSize="10"
+                                           Foreground="#FFB7BAC2" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="PricingLink" Text="官方定价页 →" FontSize="10"
+                                           Foreground="#FFE5B568" HorizontalAlignment="Right" Cursor="Hand"
+                                           Tag="clickable" PointerPressed="OnPricingLinkClick"
+                                           ToolTip.Tip="在浏览器中打开官方定价页"/>
+                            </Grid>
                         </Grid>
 
                         <!-- 余额页底部信息 -->

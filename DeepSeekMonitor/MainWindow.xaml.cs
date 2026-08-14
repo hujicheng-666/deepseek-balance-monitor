@@ -38,7 +38,6 @@ public partial class MainWindow : Window
     private DispatcherTimer _refreshTimer = null!;
     private System.Windows.Forms.NotifyIcon? _tray;
 
-    private bool _serviceView;
     private bool _lowBalanceNotified;
     private bool _refreshing;       // 防止余额刷新重入
     private bool _loadingService;   // 防止服务状态加载重入
@@ -267,24 +266,6 @@ public partial class MainWindow : Window
     }
 
     // ---------------- 服务状态视图 ----------------
-    private void ToggleServiceView()
-    {
-        _serviceView = !_serviceView;
-        var show = _serviceView;
-        BalanceText.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
-        BalanceNote.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
-        BottomRow.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
-        ServicePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        TitleText.Text = show ? "DeepSeek 服务" : "DeepSeek";
-        BtnService.Content = show ? "‹" : "◉";
-        BtnService.ToolTip = show ? "返回余额" : "查看 DeepSeek 服务状态";
-
-        if (show)
-            CheckServiceStatus();
-        else
-            SetStatus(string.IsNullOrWhiteSpace(_config.ApiKey) ? "no_key" : "ok");
-    }
-
     private void CheckServiceStatus()
     {
         if (_loadingService) return;
@@ -356,7 +337,7 @@ public partial class MainWindow : Window
     }
 
     // ---------------- 事件处理 ----------------
-    private void BtnService_Click(object sender, RoutedEventArgs e) => ToggleServiceView();
+    private void BtnService_Click(object sender, RoutedEventArgs e) => ShowView(CardView.Service);
     private void BtnMin_Click(object sender, RoutedEventArgs e) => HideToSide();
     private void BtnRefresh_Click(object sender, RoutedEventArgs e) => Refresh();
     private void BtnTopUp_Click(object sender, RoutedEventArgs e) => OpenTopUpPage();
