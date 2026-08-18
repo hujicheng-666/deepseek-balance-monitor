@@ -170,10 +170,6 @@
                             <Grid Grid.Row="1" Margin="0,6,0,0">
                                 <TextBlock x:Name="PricingMeta" Text="$ / 百万 tokens" FontSize="10"
                                            Foreground="#FFB7BAC2" HorizontalAlignment="Left"/>
-                                <TextBlock x:Name="PricingLink" Text="官方定价页 →" FontSize="10"
-                                           Foreground="#FFE5B568" HorizontalAlignment="Right" Cursor="Hand"
-                                           Tag="clickable" PointerPressed="OnPricingLinkClick"
-                                           ToolTip.Tip="在浏览器中打开官方定价页"/>
                             </Grid>
                         </Grid>
 

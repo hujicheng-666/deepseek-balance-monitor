@@ -218,13 +218,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var symbol = info.Currency == "CNY" ? "¥" : "$";
+        var unit = CurrencyUnit(info.Currency);
+        var name = CurrencyName(info.Currency);
         BalanceText.Foreground = WhiteBrush;
-        BalanceText.Text = $"{symbol} {info.TotalBalance:F2}";
-        BalanceNote.Text = $"{info.Currency} 可用余额";
-        LblTopped.Text = $"充值 {symbol}{info.ToppedUpBalance:F2}";
-        LblGranted.Text = $"赠送 {symbol}{info.GrantedBalance:F2}";
-        LblTime.Text = $"更新 {DateTime.Now:HH:mm}";
+        BalanceText.Text = $"{info.TotalBalance:F2} {unit}";
+        BalanceNote.Text = $"{name} 可用余额";
+        LblTopped.Text = $"充值 {info.ToppedUpBalance:F2} {unit}";
+        LblGranted.Text = $"赠送 {info.GrantedBalance:F2} {unit}";
+        LblTime.Text = $"更新 {BeijingTime.Now:HH:mm}";
 
         var low = info.TotalBalance < _config.LowThreshold;
         if (low && _config.LowWarn)
@@ -232,12 +233,12 @@ public partial class MainWindow : Window
             SetStatus("ok", "余额偏低");
             StatusDot.Foreground = AmberBrush;
             BalanceText.Foreground = CoralBrush;
-            BalanceNote.Text = $"余额不多啦，低于 {symbol}{_config.LowThreshold:F0} 咯～";
+            BalanceNote.Text = $"余额不多啦，低于 {_config.LowThreshold:F0} {unit} 咯～";
             if (!_lowBalanceNotified)
             {
                 _lowBalanceNotified = true;
                 _tray?.ShowBalloonTip(8000, "DeepSeek 余额偏低",
-                    $"当前可用余额 {symbol}{info.TotalBalance:F2}，低于提醒阈值 {symbol}{_config.LowThreshold:F0}。",
+                    $"当前可用余额 {info.TotalBalance:F2} {unit}，低于提醒阈值 {_config.LowThreshold:F0} {unit}。",
                     System.Windows.Forms.ToolTipIcon.Warning);
             }
         }
@@ -246,9 +247,23 @@ public partial class MainWindow : Window
             _lowBalanceNotified = false;
             SetStatus("ok");
             BalanceText.Foreground = WhiteBrush;
-            BalanceNote.Text = $"{info.Currency} 可用余额";
+            BalanceNote.Text = $"{name} 可用余额";
         }
     }
+
+    private static string CurrencyUnit(string currency) => currency switch
+    {
+        "CNY" => "元",
+        "USD" => "美元",
+        _ => currency,
+    };
+
+    private static string CurrencyName(string currency) => currency switch
+    {
+        "CNY" => "人民币",
+        "USD" => "美元",
+        _ => currency,
+    };
 
     private void SetInterval(int seconds)
     {

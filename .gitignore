@@ -12,3 +12,7 @@ release/
 **/bin/
 **/obj/
 **/*_wpftmp.csproj
+
+# 本地工具缓存目录
+.localappdata/
+.dotnet-cli-home/

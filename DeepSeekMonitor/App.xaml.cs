@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows;
+using DeepSeekMonitor.Services;
 
 namespace DeepSeekMonitor;
 
@@ -24,7 +25,7 @@ public partial class App : Application
         try
         {
             var path = System.IO.Path.Combine(AppContext.BaseDirectory, "crash.log");
-            File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}\n\n");
+            File.AppendAllText(path, $"[{BeijingTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}\n\n");
         }
         catch { }
     }

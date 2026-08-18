@@ -2,9 +2,9 @@ using System;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using DeepSeekMonitor.Models;
+using DeepSeekMonitor.Services;
 
 namespace DeepSeekMonitor;
 
@@ -86,8 +86,8 @@ public partial class MainWindow
             {
                 RenderPricingSnapshot(_lastPricing ?? ModelPricing.Fallback, live: _lastPricing != null);
                 PricingMeta.Text = _lastPricing != null
-                    ? $"$ / 百万 tokens · 官方页暂不可达，显示上次更新 {_lastPricing.FetchedAt:MM-dd HH:mm}"
-                    : $"$ / 百万 tokens · 官方页暂不可达，离线快照 {ModelPricing.Fallback.FetchedAt:yyyy-MM-dd}";
+                    ? $"$ / 百万 tokens · 官方页暂不可达，显示上次更新 {BeijingTime.ToBeijing(_lastPricing.FetchedAt):MM-dd HH:mm}"
+                    : $"$ / 百万 tokens · 官方页暂不可达，离线快照 {BeijingTime.ToBeijing(ModelPricing.Fallback.FetchedAt):yyyy-MM-dd}";
             }
         }
         finally
@@ -141,7 +141,7 @@ public partial class MainWindow
             });
         }
 
-        var when = live ? $"更新于 {DateTime.Now:HH:mm}" : $"收录于 {snapshot.FetchedAt:yyyy-MM-dd}";
+        var when = live ? $"更新于 {BeijingTime.Now:HH:mm}" : $"收录于 {BeijingTime.ToBeijing(snapshot.FetchedAt):yyyy-MM-dd}";
         var peak = string.IsNullOrEmpty(snapshot.PeakHoursDisplay) ? "" : $" · 高峰 {snapshot.PeakHoursDisplay}";
         PricingMeta.Text = $"$ / 百万 tokens · {when}{peak}";
     }
@@ -152,15 +152,4 @@ public partial class MainWindow
     private void BtnPricing_Click(object sender, RoutedEventArgs e) => ShowView(CardView.Pricing);
 
     private void MenuPricing_Click(object sender, RoutedEventArgs e) => ShowView(CardView.Pricing);
-
-    private void PricingLink_Click(object sender, MouseButtonEventArgs e) => OpenPricingPage();
-
-    private void OpenPricingPage()
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ModelPricing.OfficialPage) { UseShellExecute = true });
-        }
-        catch { /* 打不开浏览器时静默忽略 */ }
-    }
 }

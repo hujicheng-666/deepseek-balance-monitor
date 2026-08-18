@@ -261,7 +261,7 @@ public class DeepSeekApi
 
     private static string FormatTime(long unixSeconds)
         => unixSeconds > 0
-            ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            ? BeijingTime.ToBeijing(DateTimeOffset.FromUnixTimeSeconds(unixSeconds)).ToString("yyyy-MM-dd HH:mm")
             : "";
 
     private static async Task<string> GetStatusPageAsync(string url)
@@ -394,7 +394,7 @@ public class DeepSeekApi
             var title = CleanFeed(item.Element("title")?.Value ?? "服务事件");
             var detail = CleanFeed(item.Element("description")?.Value ?? "状态已更新");
             var pub = item.Element("pubDate")?.Value ?? "";
-            var time = DateTimeOffset.TryParse(pub, out var dt) ? dt.ToString("yyyy-MM-dd HH:mm") : "";
+            var time = DateTimeOffset.TryParse(pub, out var dt) ? BeijingTime.ToBeijing(dt).ToString("yyyy-MM-dd HH:mm") : "";
             events.Add(new ServiceEvent { Time = time, Title = title, Detail = detail });
         }
         return events;

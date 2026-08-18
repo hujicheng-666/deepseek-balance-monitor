@@ -278,13 +278,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var symbol = info.Currency == "CNY" ? "¥" : "$";
+        var unit = CurrencyUnit(info.Currency);
+        var name = CurrencyName(info.Currency);
         BalanceText.Foreground = WhiteBrush;
-        BalanceText.Text = $"{symbol} {info.TotalBalance:F2}";
-        BalanceNote.Text = $"{info.Currency} 可用余额";
-        LblTopped.Text = $"充值 {symbol}{info.ToppedUpBalance:F2}";
-        LblGranted.Text = $"赠送 {symbol}{info.GrantedBalance:F2}";
-        LblTime.Text = $"更新 {DateTime.Now:HH:mm}";
+        BalanceText.Text = $"{info.TotalBalance:F2} {unit}";
+        BalanceNote.Text = $"{name} 可用余额";
+        LblTopped.Text = $"充值 {info.ToppedUpBalance:F2} {unit}";
+        LblGranted.Text = $"赠送 {info.GrantedBalance:F2} {unit}";
+        LblTime.Text = $"更新 {BeijingTime.Now:HH:mm}";
 
         var low = info.TotalBalance < _config.LowThreshold;
         if (low && _config.LowWarn)
@@ -292,13 +293,13 @@ public partial class MainWindow : Window
             SetStatus("ok", "余额偏低");
             StatusDot.Foreground = AmberBrush;
             BalanceText.Foreground = CoralBrush;
-            BalanceNote.Text = $"余额不多啦，低于 {symbol}{_config.LowThreshold:F0} 咯～";
+            BalanceNote.Text = $"余额不多啦，低于 {_config.LowThreshold:F0} {unit} 咯～";
             if (!_lowBalanceNotified)
             {
                 _lowBalanceNotified = true;
                 _notifications?.Show(new Notification(
                     "DeepSeek 余额偏低",
-                    $"当前可用余额 {symbol}{info.TotalBalance:F2}，低于提醒阈值 {symbol}{_config.LowThreshold:F0}。",
+                    $"当前可用余额 {info.TotalBalance:F2} {unit}，低于提醒阈值 {_config.LowThreshold:F0} {unit}。",
                     NotificationType.Warning,
                     TimeSpan.FromSeconds(8)));
             }
@@ -308,9 +309,23 @@ public partial class MainWindow : Window
             _lowBalanceNotified = false;
             SetStatus("ok");
             BalanceText.Foreground = WhiteBrush;
-            BalanceNote.Text = $"{info.Currency} 可用余额";
+            BalanceNote.Text = $"{name} 可用余额";
         }
     }
+
+    private static string CurrencyUnit(string currency) => currency switch
+    {
+        "CNY" => "元",
+        "USD" => "美元",
+        _ => currency,
+    };
+
+    private static string CurrencyName(string currency) => currency switch
+    {
+        "CNY" => "人民币",
+        "USD" => "美元",
+        _ => currency,
+    };
 
     // ---------------- 卡片页切换（余额 / 服务 / 定价） ----------------
     /// <summary>切换卡片页面；再次点击当前页的按钮则回到余额页。</summary>
@@ -375,8 +390,8 @@ public partial class MainWindow : Window
             {
                 RenderPricingSnapshot(_lastPricing ?? ModelPricing.Fallback, live: _lastPricing != null);
                 PricingMeta.Text = _lastPricing != null
-                    ? $"$ / 百万 tokens · 官方页暂不可达，显示上次更新 {_lastPricing.FetchedAt:MM-dd HH:mm}"
-                    : $"$ / 百万 tokens · 官方页暂不可达，离线快照 {ModelPricing.Fallback.FetchedAt:yyyy-MM-dd}";
+                    ? $"$ / 百万 tokens · 官方页暂不可达，显示上次更新 {BeijingTime.ToBeijing(_lastPricing.FetchedAt):MM-dd HH:mm}"
+                    : $"$ / 百万 tokens · 官方页暂不可达，离线快照 {BeijingTime.ToBeijing(ModelPricing.Fallback.FetchedAt):yyyy-MM-dd}";
             }
         }
         finally
@@ -428,7 +443,7 @@ public partial class MainWindow : Window
             });
         }
 
-        var when = live ? $"更新于 {DateTime.Now:HH:mm}" : $"收录于 {snapshot.FetchedAt:yyyy-MM-dd}";
+        var when = live ? $"更新于 {BeijingTime.Now:HH:mm}" : $"收录于 {BeijingTime.ToBeijing(snapshot.FetchedAt):yyyy-MM-dd}";
         var peak = string.IsNullOrEmpty(snapshot.PeakHoursDisplay) ? "" : $" · 高峰 {snapshot.PeakHoursDisplay}";
         PricingMeta.Text = $"$ / 百万 tokens · {when}{peak}";
     }
@@ -437,21 +452,6 @@ public partial class MainWindow : Window
         => value.ToString("0.######");
 
     private void OnPricingClick(object? sender, RoutedEventArgs e) => ShowView(CardView.Pricing);
-
-    private void OnPricingLinkClick(object? sender, PointerPressedEventArgs e)
-    {
-        e.Handled = true;
-        OpenPricingPage();
-    }
-
-    private void OpenPricingPage()
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ModelPricing.OfficialPage) { UseShellExecute = true });
-        }
-        catch { /* 打不开浏览器时静默忽略 */ }
-    }
 
     private void CheckServiceStatus()
     {

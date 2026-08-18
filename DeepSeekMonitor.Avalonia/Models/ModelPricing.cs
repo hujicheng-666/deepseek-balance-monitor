@@ -91,9 +91,6 @@ public sealed class PricingSnapshot
 /// </summary>
 public static class ModelPricing
 {
-    /// <summary>DeepSeek 官方定价页。</summary>
-    public const string OfficialPage = "https://api-docs.deepseek.com/quick_start/pricing";
-
     /// <summary>离线兜底快照（2026-08-17 生效的峰谷价，美元 / 百万 tokens）。</summary>
     public static readonly PricingSnapshot Fallback = new(
         new List<PricingModel>
