@@ -62,6 +62,8 @@ public partial class MainWindow : Window
     private bool _dismissing;
     private bool _refreshing;       // 防止余额刷新重入
     private bool _loadingService;   // 防止服务状态加载重入
+    private bool _loadingPricing;   // 防止定价页刷新重入
+    private PricingSnapshot? _lastPricing; // 最近一次成功抓取的官方定价
 
     private readonly List<Control> _timelineRows = new();
     private readonly List<TextBlock> _rowTexts = new();
@@ -348,15 +350,50 @@ public partial class MainWindow : Window
     }
 
     // ---------------- 模型定价视图 ----------------
+    /// <summary>先展示已有数据（上次抓取或内置快照），再异步刷新官方价格。</summary>
     private void RenderPricing()
+    {
+        RenderPricingSnapshot(_lastPricing ?? ModelPricing.Fallback, live: _lastPricing != null);
+        if (_loadingPricing) return;
+        _loadingPricing = true;
+        _ = LoadPricingAsync();
+    }
+
+    private async Task LoadPricingAsync()
+    {
+        try
+        {
+            var snapshot = await _api.FetchPricingAsync();
+            _lastPricing = snapshot;
+            if (_view == CardView.Pricing)
+                RenderPricingSnapshot(snapshot, live: true);
+        }
+        catch
+        {
+            // 抓取失败：保留上次成功数据或内置快照，并标注离线。
+            if (_view == CardView.Pricing)
+            {
+                RenderPricingSnapshot(_lastPricing ?? ModelPricing.Fallback, live: _lastPricing != null);
+                PricingMeta.Text = _lastPricing != null
+                    ? $"$ / 百万 tokens · 官方页暂不可达，显示上次更新 {_lastPricing.FetchedAt:MM-dd HH:mm}"
+                    : $"$ / 百万 tokens · 官方页暂不可达，离线快照 {ModelPricing.Fallback.FetchedAt:yyyy-MM-dd}";
+            }
+        }
+        finally
+        {
+            _loadingPricing = false;
+        }
+    }
+
+    private void RenderPricingSnapshot(PricingSnapshot snapshot, bool live)
     {
         SpPricing.Children.Clear();
         // ScrollViewer 内容在首次布局前宽度未约束，TextBlock 的 Wrap 可能不生效导致横向溢出；
         // 显式限宽（基于视口实际宽度），保证任何情况下都不左右截断。
         var maxW = SvPricing.Viewport.Width > 0 ? SvPricing.Viewport.Width - 7 : 296;
-        foreach (var p in ModelPricing.All)
+
+        foreach (var p in snapshot.Models)
         {
-            // 与服务状态页一致的纯文本列表：无卡片框、可滚动、不截断
             SpPricing.Children.Add(new TextBlock
             {
                 Text = $"{p.ApiName} · {p.BaseModel}",
@@ -367,10 +404,22 @@ public partial class MainWindow : Window
                 MaxWidth = maxW,
                 Margin = new Thickness(0, 0, 4, 2),
             });
+
+            var peakIn = $"{Price(p.PeakCacheHit)}/{Price(p.PeakCacheMiss)}";
+            var offIn = $"{Price(p.OffPeakCacheHit)}/{Price(p.OffPeakCacheMiss)}";
+            string body;
+            if (snapshot.IsPeakNow == true)
+                body = $"● 当前高峰 输入 ${peakIn}（命中/未命中）· 输出 ${Price(p.PeakOutput)}\n非高峰 输入 ${offIn} · 输出 ${Price(p.OffPeakOutput)}";
+            else if (snapshot.IsPeakNow == false)
+                body = $"● 当前非高峰 输入 ${offIn}（命中/未命中）· 输出 ${Price(p.OffPeakOutput)}\n高峰 输入 ${peakIn} · 输出 ${Price(p.PeakOutput)}";
+            else
+                body = $"高峰 输入 ${peakIn}（命中/未命中）· 输出 ${Price(p.PeakOutput)}\n非高峰 输入 ${offIn} · 输出 ${Price(p.OffPeakOutput)}";
+            if (!string.IsNullOrWhiteSpace(p.Concurrency))
+                body += $"\n并发上限 {p.Concurrency}";
+
             SpPricing.Children.Add(new TextBlock
             {
-                Text = $"现行：输入 ${Price(p.InputCacheHit)}/${Price(p.InputCacheMiss)}（命中/未命中）· 输出 ${Price(p.Output)}\n" +
-                       $"{ModelPricing.PeakOffPeakEffective} 起峰谷：高峰 输入 ${Price(p.PeakInputCacheHit)}/${Price(p.PeakInputCacheMiss)} 输出 ${Price(p.PeakOutput)} · 非高峰 输入 ${Price(p.OffPeakInputCacheHit)}/${Price(p.OffPeakInputCacheMiss)} 输出 ${Price(p.OffPeakOutput)}",
+                Text = body,
                 FontSize = 10,
                 Foreground = SubBrush,
                 TextWrapping = TextWrapping.Wrap,
@@ -379,7 +428,9 @@ public partial class MainWindow : Window
             });
         }
 
-        PricingMeta.Text = $"$ / 百万 tokens · 收录于 {ModelPricing.UpdatedAt}";
+        var when = live ? $"更新于 {DateTime.Now:HH:mm}" : $"收录于 {snapshot.FetchedAt:yyyy-MM-dd}";
+        var peak = string.IsNullOrEmpty(snapshot.PeakHoursDisplay) ? "" : $" · 高峰 {snapshot.PeakHoursDisplay}";
+        PricingMeta.Text = $"$ / 百万 tokens · {when}{peak}";
     }
 
     private static string Price(double value)
@@ -856,7 +907,7 @@ public partial class MainWindow : Window
     private void RequestDock()
     {
         _cancelHide();
-        // A ContextMenu owns a native popup on macOS/Linux. Defer geometry
+        // A ContextMenu owns a native popup on Linux. Defer geometry
         // changes until it has completed closing, otherwise the dock request
         // is swallowed by the popup's close transition.
         Dispatcher.UIThread.Post(HideToSide, DispatcherPriority.Background);

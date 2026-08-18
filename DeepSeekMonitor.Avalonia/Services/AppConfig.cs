@@ -19,9 +19,8 @@ public class AppConfig
     [JsonPropertyName("low_warn")]
     public bool LowWarn { get; set; } = true;
 
-    // 优先写入用户目录(Windows: %APPDATA%,macOS: ~/Library/Application Support,
-    // Linux: ~/.config),避免安装目录只读导致保存失败;旧版写在程序目录的
-    // config.json 会在 Load 时自动迁移过来。
+    // 优先写入用户目录(Windows: %APPDATA%,Linux: ~/.config),避免安装目录只读导致保存失败;
+    // 旧版写在程序目录的 config.json 会在 Load 时自动迁移过来。
     private static string UserConfigPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "DeepSeekMonitor", "config.json");

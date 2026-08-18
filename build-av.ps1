@@ -1,6 +1,5 @@
 # Build an installer on the current operating system.
 # Windows: Inno Setup .exe (requires Inno Setup)
-# macOS: .dmg (run packaging/make-macos-dmg.sh)
 # Linux: .deb + .rpm (run packaging/make-linux-packages.sh)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -8,11 +7,6 @@ Set-Location $PSScriptRoot
 $runtime = [System.Runtime.InteropServices.RuntimeInformation]
 if ($runtime::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
     & powershell -ExecutionPolicy Bypass -File .\build.ps1
-    exit $LASTEXITCODE
-}
-
-if ($runtime::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)) {
-    & bash ./packaging/make-macos-dmg.sh
     exit $LASTEXITCODE
 }
 

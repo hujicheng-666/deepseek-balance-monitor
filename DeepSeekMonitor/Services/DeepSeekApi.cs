@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -33,6 +35,7 @@ public class DeepSeekApi
     private const string StatusApiMirror = "https://api.flashcat.cloud/status-page/" + FlashcatPageId;
     private const string StatusApiOrigin = "https://status.deepseek.com/api/status-page/" + FlashcatPageId;
     private const string HistoryRssUrl = "https://status.deepseek.com/history.rss";
+    private const string PricingUrl = "https://api-docs.deepseek.com/quick_start/pricing";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     public async Task<BalanceInfo> FetchBalanceAsync(string apiKey)
@@ -106,6 +109,115 @@ public class DeepSeekApi
         }
     }
 
+    /// <summary>实时抓取并解析 DeepSeek 官方定价页。</summary>
+    public async Task<PricingSnapshot> FetchPricingAsync()
+    {
+        var html = await DownloadTextAsync(PricingUrl, "text/html, application/xhtml+xml, */*");
+        return ParsePricingHtml(html);
+    }
+
+    /// <summary>从 Docusaurus 定价页 HTML 中解析各模型的高峰/非高峰价格与峰谷时段。</summary>
+    private static PricingSnapshot ParsePricingHtml(string html)
+    {
+        var table = Regex.Match(html, @"<table[^>]*>.*?</table>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        if (!table.Success)
+            throw new ApiException("官方定价页没有找到价格表");
+
+        // 逐行解析成单元格文本（去掉 HTML 标签、HTML 实体并合并空白）。
+        var rows = new List<List<string>>();
+        foreach (Match rm in Regex.Matches(table.Value, @"<tr[^>]*>(.*?)</tr>", RegexOptions.Singleline | RegexOptions.IgnoreCase))
+        {
+            var cells = new List<string>();
+            foreach (Match cm in Regex.Matches(rm.Groups[1].Value, @"<td[^>]*>(.*?)</td>", RegexOptions.Singleline | RegexOptions.IgnoreCase))
+            {
+                var text = CleanCell(cm.Groups[1].Value);
+                if (text.Length > 0) cells.Add(text);
+            }
+            if (cells.Count > 0) rows.Add(cells);
+        }
+
+        var names = FindRowValues(rows, c => c == "MODEL");
+        var versions = FindRowValues(rows, c => c == "MODEL VERSION");
+        var concurrency = TryFindRowValues(rows, c => c.StartsWith("Concurrency Limit", StringComparison.OrdinalIgnoreCase));
+
+        var hit = FindPricingRow(rows, "CACHE HIT");
+        var miss = FindPricingRow(rows, "CACHE MISS");
+        var output = FindPricingRow(rows, "OUTPUT TOKENS");
+
+        var count = names.Count;
+        if (count == 0)
+            throw new ApiException("官方定价页没有解析到模型");
+
+        var models = new List<PricingModel>();
+        for (var i = 0; i < count; i++)
+        {
+            // 每个定价行的最后 count 个单元格依次是各模型的价格。
+            double PriceCell(List<string> row) => ParsePrice(row[row.Count - count + i]);
+            models.Add(new PricingModel(
+                names[i],
+                i < versions.Count ? versions[i] : "",
+                PriceCell(rows[hit]), PriceCell(rows[miss]), PriceCell(rows[output]),
+                PriceCell(rows[hit + 1]), PriceCell(rows[miss + 1]), PriceCell(rows[output + 1]),
+                i < concurrency.Count ? concurrency[i] : ""));
+        }
+
+        return new PricingSnapshot(models, ExtractPeakHoursNote(html), DateTimeOffset.Now);
+    }
+
+    /// <summary>返回首单元格满足条件的那一行去掉首单元格后的剩余单元格。</summary>
+    private static List<string> FindRowValues(List<List<string>> rows, Func<string, bool> firstCellMatches)
+    {
+        foreach (var row in rows)
+        {
+            if (row.Count >= 2 && firstCellMatches(row[0]))
+                return row.Skip(1).ToList();
+        }
+        throw new ApiException("官方定价页表格结构变化，无法解析");
+    }
+
+    /// <summary>同上，但找不到时返回空列表（用于可选字段）。</summary>
+    private static List<string> TryFindRowValues(List<List<string>> rows, Func<string, bool> firstCellMatches)
+    {
+        foreach (var row in rows)
+        {
+            if (row.Count >= 2 && firstCellMatches(row[0]))
+                return row.Skip(1).ToList();
+        }
+        return new List<string>();
+    }
+
+    /// <summary>找到包含指定标签的定价行（OFF-PEAK 行，其下一行即 PEAK 行）。</summary>
+    private static int FindPricingRow(List<List<string>> rows, string label)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (string.Join(" ", rows[i]).IndexOf(label, StringComparison.OrdinalIgnoreCase) >= 0)
+                return i;
+        }
+        throw new ApiException($"官方定价页缺少 {label} 行");
+    }
+
+    private static double ParsePrice(string cell)
+    {
+        var text = cell.Replace("$", "").Replace(",", "").Trim();
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : 0;
+    }
+
+    /// <summary>提取 "Peak hours are ..." 那一句，用于展示峰谷时段并判断当前是否高峰。</summary>
+    private static string ExtractPeakHoursNote(string html)
+    {
+        var match = Regex.Match(html, @"Peak hours are[^.<]*\.?", RegexOptions.IgnoreCase);
+        return match.Success ? CleanCell(match.Value) : "";
+    }
+
+    private static string CleanCell(string fragment)
+    {
+        var text = WebUtility.HtmlDecode(fragment);
+        text = Regex.Replace(text, "<[^>]+>", " ");
+        text = Regex.Replace(text, @"\s+", " ").Trim();
+        return text;
+    }
+
     /// <summary>解析 Flashduty change/list 接口，返回按时间倒序的服务事件。</summary>
     private static List<ServiceEvent> ParseFlashdutyIncidents(string json)
     {
@@ -153,6 +265,10 @@ public class DeepSeekApi
             : "";
 
     private static async Task<string> GetStatusPageAsync(string url)
+        => await DownloadTextAsync(url, "application/json, application/rss+xml, text/xml, */*");
+
+    /// <summary>通用文本下载：WinINet 与 HttpClient 双路径各试一次，共 3 轮。</summary>
+    private static async Task<string> DownloadTextAsync(string url, string accept)
     {
         Exception? lastError = null;
         for (var attempt = 0; attempt < 3; attempt++)
@@ -160,7 +276,7 @@ public class DeepSeekApi
             try
             {
                 // 先走 WinINet（跟随系统代理/PAC，与浏览器同路径）。
-                return await Task.Run(() => DownloadWithWinInet(url));
+                return await Task.Run(() => DownloadWithWinInet(url, accept));
             }
             catch (Exception ex)
             {
@@ -172,7 +288,7 @@ public class DeepSeekApi
                 // Some TLS middleboxes behave differently for WinINet. The
                 // SocketsHttpHandler route gives the same URL a second, truly
                 // independent connection path.
-                return await DownloadWithHttpClientAsync(url);
+                return await DownloadWithHttpClientAsync(url, accept);
             }
             catch (Exception ex)
             {
@@ -182,21 +298,21 @@ public class DeepSeekApi
             if (attempt < 2)
                 await Task.Delay(TimeSpan.FromMilliseconds(650 * (attempt + 1)));
         }
-        throw new ApiException(lastError?.Message ?? "状态页连接失败");
+        throw new ApiException(lastError?.Message ?? "连接失败");
     }
 
-    private static async Task<string> DownloadWithHttpClientAsync(string url)
+    private static async Task<string> DownloadWithHttpClientAsync(string url, string accept)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36");
-        request.Headers.Accept.ParseAdd("application/json, application/rss+xml, text/xml, */*");
+        request.Headers.Accept.ParseAdd(accept);
         request.Headers.AcceptEncoding.ParseAdd("identity");
         using var response = await Http.SendAsync(request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();
     }
 
-    private static string DownloadWithWinInet(string url)
+    private static string DownloadWithWinInet(string url, string accept)
     {
         const int InternetOpenTypePreconfig = 0;
         const int InternetFlagReload = unchecked((int)0x80000000);
@@ -205,7 +321,7 @@ public class DeepSeekApi
         const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36";
         // Qt transparently handles compressed replies. Prefer a plain reply
         // and still decode gzip below for proxies that ignore this header.
-        const string Headers = "Accept: application/json, application/rss+xml, text/xml, */*\r\nAccept-Encoding: identity\r\n";
+        var headers = $"Accept: {accept}\r\nAccept-Encoding: identity\r\n";
 
         var session = NativeWinInet.InternetOpen(UserAgent, InternetOpenTypePreconfig, null, null, 0);
         if (session == IntPtr.Zero)
@@ -213,10 +329,10 @@ public class DeepSeekApi
 
         try
         {
-            var request = NativeWinInet.InternetOpenUrl(session, url, Headers, Headers.Length,
+            var request = NativeWinInet.InternetOpenUrl(session, url, headers, headers.Length,
                 InternetFlagReload | InternetFlagNoCacheWrite | InternetFlagSecure, IntPtr.Zero);
             if (request == IntPtr.Zero)
-                throw new ApiException($"系统网络无法访问状态页 ({Marshal.GetLastWin32Error()})");
+                throw new ApiException($"系统网络无法访问该页面 ({Marshal.GetLastWin32Error()})");
 
             try
             {
@@ -225,7 +341,7 @@ public class DeepSeekApi
                 while (NativeWinInet.InternetReadFile(request, buffer, buffer.Length, out var read) && read > 0)
                     stream.Write(buffer, 0, read);
                 if (Marshal.GetLastWin32Error() != 0 && stream.Length == 0)
-                    throw new ApiException($"读取状态页失败 ({Marshal.GetLastWin32Error()})");
+                    throw new ApiException($"读取页面失败 ({Marshal.GetLastWin32Error()})");
                 return DecodeResponse(stream.ToArray());
             }
             finally

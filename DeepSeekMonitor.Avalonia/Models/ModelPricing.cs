@@ -1,91 +1,112 @@
+using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace DeepSeekMonitor.Models;
 
-/// <summary>单个 API 模型的官方定价（美元 / 百万 tokens）。</summary>
-public sealed class ModelPrice
+/// <summary>单个模型的价格（美元 / 百万 tokens），分高峰与非高峰两档。</summary>
+public sealed class PricingModel
 {
-    public ModelPrice(string apiName, string baseModel, string description,
-        double inputCacheHit, double inputCacheMiss, double output,
-        double peakInputCacheHit, double peakInputCacheMiss, double peakOutput,
-        double offPeakInputCacheHit, double offPeakInputCacheMiss, double offPeakOutput)
+    public PricingModel(string apiName, string baseModel,
+        double offPeakCacheHit, double offPeakCacheMiss, double offPeakOutput,
+        double peakCacheHit, double peakCacheMiss, double peakOutput,
+        string concurrency)
     {
         ApiName = apiName;
         BaseModel = baseModel;
-        Description = description;
-        InputCacheHit = inputCacheHit;
-        InputCacheMiss = inputCacheMiss;
-        Output = output;
-        PeakInputCacheHit = peakInputCacheHit;
-        PeakInputCacheMiss = peakInputCacheMiss;
-        PeakOutput = peakOutput;
-        OffPeakInputCacheHit = offPeakInputCacheHit;
-        OffPeakInputCacheMiss = offPeakInputCacheMiss;
+        OffPeakCacheHit = offPeakCacheHit;
+        OffPeakCacheMiss = offPeakCacheMiss;
         OffPeakOutput = offPeakOutput;
+        PeakCacheHit = peakCacheHit;
+        PeakCacheMiss = peakCacheMiss;
+        PeakOutput = peakOutput;
+        Concurrency = concurrency;
     }
 
-    /// <summary>API 里的模型名，如 deepseek-v4-flash。</summary>
     public string ApiName { get; }
-
-    /// <summary>当前对应的基础模型版本，如 DeepSeek-V4-Flash-0731。</summary>
     public string BaseModel { get; }
-
-    /// <summary>一句话用途说明。</summary>
-    public string Description { get; }
-
-    /// <summary>现行输入价（缓存命中），美元 / 百万 tokens。</summary>
-    public double InputCacheHit { get; }
-
-    /// <summary>现行输入价（缓存未命中），美元 / 百万 tokens。</summary>
-    public double InputCacheMiss { get; }
-
-    /// <summary>现行输出价，美元 / 百万 tokens。</summary>
-    public double Output { get; }
-
-    /// <summary>峰谷计费生效后的高峰输入价（缓存命中），美元 / 百万 tokens。</summary>
-    public double PeakInputCacheHit { get; }
-
-    /// <summary>峰谷计费生效后的高峰输入价（缓存未命中），美元 / 百万 tokens。</summary>
-    public double PeakInputCacheMiss { get; }
-
-    /// <summary>峰谷计费生效后的高峰输出价，美元 / 百万 tokens。</summary>
+    public double OffPeakCacheHit { get; }
+    public double OffPeakCacheMiss { get; }
+    public double OffPeakOutput { get; }
+    public double PeakCacheHit { get; }
+    public double PeakCacheMiss { get; }
     public double PeakOutput { get; }
 
-    /// <summary>峰谷计费生效后的非高峰输入价（缓存命中），美元 / 百万 tokens。</summary>
-    public double OffPeakInputCacheHit { get; }
+    /// <summary>官方页展示的并发上限，可能为空。</summary>
+    public string Concurrency { get; }
+}
 
-    /// <summary>峰谷计费生效后的非高峰输入价（缓存未命中），美元 / 百万 tokens。</summary>
-    public double OffPeakInputCacheMiss { get; }
+/// <summary>官方定价页实时快照：模型价格 + 峰谷时段 + 当前是否处于高峰。</summary>
+public sealed class PricingSnapshot
+{
+    public PricingSnapshot(IReadOnlyList<PricingModel> models, string peakHoursNote, DateTimeOffset fetchedAt)
+    {
+        Models = models;
+        PeakHoursNote = peakHoursNote;
+        FetchedAt = fetchedAt;
 
-    /// <summary>峰谷计费生效后的非高峰输出价，美元 / 百万 tokens。</summary>
-    public double OffPeakOutput { get; }
+        // 从 "01:00 - 04:00 and 06:00 - 10:00 UTC" 这类描述中解析高峰时段窗口。
+        var windows = new List<(int Start, int End)>();
+        foreach (Match m in Regex.Matches(peakHoursNote ?? "", @"(\d{1,2}):\d{2}\s*-\s*(\d{1,2}):\d{2}"))
+        {
+            if (int.TryParse(m.Groups[1].Value, out var start) && int.TryParse(m.Groups[2].Value, out var end))
+                windows.Add((start, end));
+        }
+
+        if (windows.Count == 0)
+        {
+            IsPeakNow = null;
+            PeakHoursDisplay = peakHoursNote ?? "";
+        }
+        else
+        {
+            var hour = fetchedAt.UtcDateTime.Hour;
+            var peak = false;
+            foreach (var w in windows)
+            {
+                if (hour >= w.Start && hour < w.End) { peak = true; break; }
+            }
+            IsPeakNow = peak;
+
+            var parts = new List<string>();
+            foreach (var w in windows)
+                parts.Add($"{w.Start:00}:00–{w.End:00}:00");
+            PeakHoursDisplay = string.Join(" / ", parts) + " UTC";
+        }
+    }
+
+    public IReadOnlyList<PricingModel> Models { get; }
+    public string PeakHoursNote { get; }
+    public DateTimeOffset FetchedAt { get; }
+
+    /// <summary>当前是否处于高峰；时段解析失败时为 null。</summary>
+    public bool? IsPeakNow { get; }
+
+    /// <summary>峰谷时段展示文本，如 "01:00–04:00 / 06:00–10:00 UTC"。</summary>
+    public string PeakHoursDisplay { get; }
 }
 
 /// <summary>
-/// DeepSeek 官方模型定价快照。官方价格偶有调整，本表仅作参考，
-/// 展示页底部可一键打开官方定价页核对。
+/// DeepSeek 官方模型定价。优先实时抓取官方定价页；抓取失败时使用内置快照兜底。
 /// </summary>
 public static class ModelPricing
 {
     /// <summary>DeepSeek 官方定价页。</summary>
     public const string OfficialPage = "https://api-docs.deepseek.com/quick_start/pricing";
 
-    /// <summary>快照收录日期，展示在定价页底部。</summary>
-    public const string UpdatedAt = "2026-08-14";
-
-    /// <summary>峰谷计费生效时间（UTC），展示在定价页上。</summary>
-    public const string PeakOffPeakEffective = "2026-08-16 16:00 UTC";
-
-    public static readonly IReadOnlyList<ModelPrice> All = new List<ModelPrice>
-    {
-        // deepseek-v4-flash / deepseek-v4-pro（官方 2026-08-14 现行价 + 8/16 起峰谷价，美元 / 百万 tokens）
-        new("deepseek-v4-flash", "DeepSeek-V4-Flash-0731", "轻量快速",
-            0.0028, 0.14, 0.28,      // 现行：输入(命中/未命中) / 输出
-            0.014, 0.44, 1.32,       // 高峰：输入(命中/未命中) / 输出
-            0.007, 0.22, 0.66),      // 非高峰：输入(命中/未命中) / 输出
-        new("deepseek-v4-pro", "DeepSeek-V4-Pro-0813", "高规格推理",
-            0.003625, 0.435, 0.87,
-            0.044, 1.32, 3.96,
-            0.022, 0.66, 1.98),
-    };
+    /// <summary>离线兜底快照（2026-08-17 生效的峰谷价，美元 / 百万 tokens）。</summary>
+    public static readonly PricingSnapshot Fallback = new(
+        new List<PricingModel>
+        {
+            new("deepseek-v4-flash", "DeepSeek-V4-Flash-0731",
+                0.007, 0.22, 0.66,      // 非高峰：输入(命中/未命中) / 输出
+                0.014, 0.44, 1.32,      // 高峰：输入(命中/未命中) / 输出
+                "2500"),
+            new("deepseek-v4-pro", "DeepSeek-V4-Pro-0813",
+                0.022, 0.66, 1.98,
+                0.044, 1.32, 3.96,
+                "500"),
+        },
+        "01:00 - 04:00 and 06:00 - 10:00 UTC",
+        new DateTimeOffset(2026, 8, 17, 0, 0, 0, TimeSpan.Zero));
 }

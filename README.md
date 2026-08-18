@@ -9,7 +9,7 @@
 - 自动刷新余额，支持 30 秒 / 1 / 5 / 15 分钟间隔
 - 拖动或点击收纳按钮后，可缩为侧边鲸鱼球；悬停自动展开
 - 余额页、模型定价页与服务事件页在同一卡片内切换，不改变窗口尺寸
-- 模型定价页展示 deepseek-chat / deepseek-reasoner 的官方输入输出单价（含缓存命中/未命中），底部可一键打开官方定价页核对
+- 模型定价页实时抓取官方定价页，展示各模型的输入输出单价（含缓存命中/未命中与高峰/非高峰两档，并高亮当前生效档），底部可一键打开官方定价页核对
 - 服务事件页读取 DeepSeek 官方状态页近期事件，以可滚动时间线展示
 - 右键菜单可设置 API Key、刷新间隔、低余额提醒和退出
 - 关闭时提供粒子消散动效
@@ -82,7 +82,7 @@ deepseek-balance-monitor/
 - `config.json` 会以**明文**保存你的 API Key，请勿把该文件分享或提交到公开仓库（已在 `.gitignore` 中忽略）。
 - 余额数据来自 DeepSeek 官方接口 `GET /user/balance`。
 - 服务事件数据来自 [DeepSeek Service Status](https://status.deepseek.com/)。
-- 模型定价为内置快照（`Models/ModelPricing.cs`，页面底部标注收录日期），DeepSeek 官方价格偶有调整，请以[官方定价页](https://api-docs.deepseek.com/quick_start/pricing)为准。
+- 模型定价为实时抓取官方定价页（抓取失败时回退到 `Models/ModelPricing.cs` 的内置快照），DeepSeek 官方价格偶有调整，请以[官方定价页](https://api-docs.deepseek.com/quick_start/pricing)为准。
 
 ## 📦 打包发布（.NET publish + Inno Setup）
 
@@ -98,7 +98,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 - `dist\DeepSeek\DeepSeekMonitor.exe` — 免安装版（绿色，自包含单文件）
 - `release\DeepSeek-Setup-2.0.0.exe` — 安装程序
 
-## 🍎🐧 跨平台版（Avalonia，macOS / Linux）
+## 🐧 Linux 版（Avalonia）
 
 `DeepSeekMonitor.Avalonia` 是用 **Avalonia** 移植的跨平台版本，功能与 WPF 版基本一致
 （悬浮窗、余额刷新、服务时间线、托盘、贴边收纳），业务逻辑（API/配置）复用同一套实现。
@@ -107,11 +107,9 @@ WPF 版（Windows）与 Avalonia 版并存，互不影响。
 仅生成系统安装包，不再保留便携版、压缩包或 AppImage：
 
 - Windows：在 Windows 上执行 `powershell -ExecutionPolicy Bypass -File .\build.ps1`，生成 `release\DeepSeek-Setup-2.0.0.exe`。
-- macOS：在 macOS 上执行 `./packaging/make-macos-dmg.sh`，生成 `release/DeepSeek-2.0.0-macos-<arch>.dmg`。
 - Linux：在 Linux 上执行 `./packaging/make-linux-packages.sh`，生成 `release/DeepSeek_2.0.0_linux_<arch>.deb` 和 `.rpm`。
 
 也可在对应系统上执行 `powershell -ExecutionPolicy Bypass -File .\build-av.ps1`，它会选择该系统的安装包脚本。
 
 > 说明：
-> - macOS DMG 未签名，正式分发前请设置 `MACOS_SIGN_IDENTITY`，并再执行 `notarize`。
 > - 托盘图标在 Linux 需要支持 StatusNotifier/AppIndicator 的桌面环境；纯 X11 无托盘也可正常使用。
